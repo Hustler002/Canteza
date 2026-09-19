@@ -83,17 +83,18 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 ### `supabase/` — the database
 
-| File                              | Holds                                                                   |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| `..._schema.sql`                  | 19 tables, indexes, `canteens_public` view, `order_transitions` table   |
-| composite FK                      | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`       |
-| `..._rls.sql`                     | RLS helpers, policies, column-level grants, realtime                    |
-| `..._functions.sql`               | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
-| `..._student_default_address.sql` | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
-| `..._delivery_shift_toggle.sql`   | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
-| `seed.sql`                        | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
-| `seed-users.mjs`                  | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                           | 95 tests on in-process Postgres — see `test/README.md`                  |
+| File                                | Holds                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `..._schema.sql`                    | 19 tables, indexes, `canteens_public` view, `order_transitions` table   |
+| composite FK                        | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`       |
+| `..._rls.sql`                       | RLS helpers, policies, column-level grants, realtime                    |
+| `..._functions.sql`                 | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
+| `..._student_default_address.sql`   | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
+| `..._delivery_shift_toggle.sql`     | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
+| `..._harden_default_privileges.sql` | **Security.** Revokes Supabase's blanket grants, restates the real ones |
+| `seed.sql`                          | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
+| `seed-users.mjs`                    | Accounts via the Auth API, then demo orders through the real RPCs       |
+| `test/`                             | 95 tests on in-process Postgres — see `test/README.md`                  |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -136,7 +137,10 @@ npm run db:push        # deploy migrations to the linked project
    `order_items` at purchase. Never join to `menu_items` for a historical price.
 7. **Every new table gets RLS and a policy in the same migration.** Two tests enforce this.
 8. **Anything that must never be client-writable is withheld at the `GRANT`**, not the
-   policy — policies cannot restrict columns.
+   policy — policies cannot restrict columns. This only works because
+   `..._harden_default_privileges.sql` first revokes the blanket grants Supabase hands
+   `anon`/`authenticated` on every table in `public`. **Change privileges in that
+   migration**, not in the earlier RLS one, which the revoke supersedes.
 9. **Realtime invalidates TanStack Query keys**; it never patches component state directly.
 10. **Errors surface as `AppError`.** SQL raises `'CODE: detail'`; `toAppError()` parses the
     prefix. A new code in SQL needs the same code in `errors.ts`.
@@ -200,6 +204,9 @@ Departures from the original brief, all argued in the ADRs:
   it needs a scheduled job and lands with Razorpay in Phase 8.
 - **Coupon funding is undecided** — a discount currently comes out of the canteen's share
   even when an admin issued the code. Decide before Phase 7 ships coupons (ADR 008).
+- **Nothing has run against a real Supabase yet.** Auth, Realtime and PostgREST are
+  exercised only through generated types and the SQL tests. See "Verifying against a
+  real database" below — it needs no Docker.
 - PGlite is single-connection, so the race tests verify the **guard** sequentially (A claims,
   B is refused) rather than firing two transactions in parallel. The atomicity is Postgres's
   own, but when Docker is available, re-run the claim scenario against `supabase start` with
@@ -228,6 +235,24 @@ app/(delivery)/history.tsx        completed deliveries + counts (never a rupee f
 claims, but never touches an order already in hand. `orders` matches those by
 `delivery_partner_id = auth.uid()` and `transition_order` resolves the actor the same
 way, so going off shift cannot strand food someone is carrying.
+
+## Verifying against a real database
+
+`supabase start` needs Docker, which this machine does not have — but **`supabase db
+push` does not** (it fails with a connection error, not `LegacyDockerRunError`, unlike
+`gen types`). So a free hosted project verifies the whole stack with nothing installed:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <ref>
+npx supabase db push --include-seed        # migrations + seed.sql
+npm run db:seed:users                      # accounts + demo orders via the real RPCs
+```
+
+`db:seed:users` needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment
+and refuses a hosted URL unless `ALLOW_REMOTE_SEED=1` is set. It drives `place_order`,
+`transition_order` and `claim_delivery` over HTTP, so a clean run proves PostgREST, Auth
+and the RPC surface end to end. Realtime still needs a device or browser watching.
 
 ## Next session: start here
 
