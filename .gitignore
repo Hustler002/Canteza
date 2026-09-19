@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.expo/
+.next/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+supabase/.temp/
+supabase/.branches/
