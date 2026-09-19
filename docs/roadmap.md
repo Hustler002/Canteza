@@ -12,8 +12,8 @@ half-built screens.
 | 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
 | 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done |
 | 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ✅ done |
-| 7     | Secondary: ratings, favourites, reorder, coupons, complaints                     | ⬜ next |
-| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜      |
+| 7     | Menu management, ratings, favourites, reorder, coupons, complaints               | ✅ done |
+| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜ next |
 
 ---
 
@@ -186,9 +186,79 @@ Discounts are reported as their own figure rather than netted into either side, 
 who funds them is still undecided (ADR 008) — and shipping coupons in Phase 7 will force
 that decision.
 
-## Phase 7 — secondary features
+## Phase 7 — menu management and the secondary features
 
-Ratings, favourites, reorder, coupons, support tickets, analytics charts.
+**Menu management comes first**, because it is the one gap that stops the product working
+rather than making it nicer. `menu_items` has had full client CRUD grants and both
+policies (`menu_items_own_canteen`, `menu_items_admin`) since Phase 2, and the only code
+that has ever touched the table reads it. So a canteen cannot add a dish or change a
+price, and `admin_create_canteen`'s intended flow — create disabled, attach staff, add a
+menu, enable — has no screen for its third step. It is built on **both** surfaces: the
+canteen's own screen in `apps/mobile`, because pricing and sold-out are the counter's
+daily work, and an admin page, because the admin sets a new canteen up before anyone is
+posted to it.
+
+An item is disabled, never deleted — `order_items` snapshots the name and price, but the
+FK is kept for reorder and analytics (context.md §5), so a delete would orphan history.
+Postgres enforces it: the reference carries no `on delete` clause, so removing an item
+anyone has ordered is refused outright.
+
+**Both halves are done.** The admin page was walked in a browser against the live
+project: add, edit a price, retire, restore, sold out, the duplicate-name error, and
+375px. The counter's screen (`app/(canteen)/menu.tsx`) followed, built around the
+sold-out switch rather than the form, because that is the button that gets pressed
+during service.
+
+Both are plain table writes rather than RPCs — the same departure `hostels` makes, for
+the same reason: `menu_items` withholds no column, so the grant and the two WITH CHECK
+policies already say everything a `security definer` function would restate.
+
+That claim is the one worth proving with real sign-ins, and `verify:live` now does, in a
+new §5: a canteen adds and prices its own dish, a sold-out dish is still visible to a
+student while a retired one is not, and a rival canteen can neither price another
+canteen's dish (RLS filters the update to zero rows rather than erroring) nor insert onto
+its menu (WITH CHECK refuses outright). **41/41.** The test dish is removed in the
+`finally`, alongside the canteen's opening hours.
+
+Then the secondary features. Every table exists from Phase 2 with RLS and client grants:
+`reviews`, `favorites`, `coupons`, `coupon_redemptions`, `support_tickets`.
+
+**Student order history is the prerequisite for two of them**, and is now built:
+`app/(student)/my-orders.tsx`, reached from the home screen, reading the `listMyOrders`
+that had sat in `packages/api/orders.ts` since Phase 4 without a caller. Rating and
+reorder hang off it.
+
+It is `my-orders.tsx` rather than `orders.tsx` because route groups do not appear in the
+URL and `(canteen)/orders.tsx` already owns `/orders` — the collision rule 19 warns
+about, met for real. `verify:live` §6 covers the read: the embed resolves, every order
+carries its own line items, and a student's history contains nobody else's orders, which
+is `orders_read` doing the work rather than a `where` clause.
+
+Coupons were mostly done server-side already — `place_order` validates the code, the
+minimum, `max_redemptions` and `per_student_limit`, caps the discount at the subtotal and
+writes `coupon_redemptions`; the terminal transition hands the redemption back (rule 12).
+What landed was the checkout field, a read of the usable codes, and nothing else: the
+screen deliberately shows no discount figure, because `place_order` is what applies one
+and a number computed on the phone would disagree with the receipt whenever a rule bit.
+**An admin page for creating codes is still missing** — `coupons_admin` already allows
+it, so that is a page and no migration.
+
+Ratings, favourites and complaints are all plain table writes held up by policy alone,
+which is the bet `verify:live` §7 exists to settle: a student rates the order they just
+received, cannot rate it twice, cannot rate anyone else's, cannot read another student's
+favourites or complaints, and cannot resolve their own complaint — while an admin can.
+**59/59.**
+
+It found one real defect on the first run. `addFavorite` used PostgREST's upsert, which
+is `insert ... on conflict do update` and therefore asks for the UPDATE privilege;
+`favorites` is granted `select, insert, delete` and no UPDATE, because the table is
+nothing but its primary key and there is no column a repeat could change. The fix was a
+plain insert that swallows 23505, not a wider grant.
+
+**Funding is settled: the canteen absorbs every discount, including an admin-issued code**
+(ADR 008). The platform's ₹2 of the delivery fee is never touched by a coupon. That was
+already true of the maths, so nothing in `place_order` or `revenue_by_canteen_day`
+changed — the analytics page simply stops calling it undecided.
 
 ## Phase 8 — production
 

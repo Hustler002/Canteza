@@ -1,0 +1,35 @@
+name: verify
+
+# Every push and every pull request. The whole suite is roughly a minute and needs
+# no services: the database tests run on PGlite in-process (ADR 007), so there is no
+# Postgres container to wait for and no Docker at all.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The floor in package.json's engines. Passing here means the repo builds on
+          # what it claims to support, not only on whatever the last machine had.
+          node-version: 20
+          cache: npm
+
+      # `npm ci`, not `npm install`: it installs exactly the lockfile and fails if
+      # package.json and the lock have drifted, which is a thing worth failing on.
+      - run: npm ci
+
+      # format:check + lint + typecheck + test, the same command used before handing
+      # work over. One script, so CI and a developer cannot check different things.
+      - run: npm run verify

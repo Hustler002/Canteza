@@ -152,7 +152,8 @@ h3 {
   font-weight: 600;
   color: var(--text-muted);
 }
-.field input {
+.field input,
+.field select {
   min-height: 44px;
   padding: 0 14px;
   border-radius: var(--radius);
@@ -344,4 +345,28 @@ h3 {
   margin-top: 2px;
   accent-color: var(--primary);
   flex: none;
+}
+
+/* One menu item, collapsed. `<details>` keeps a long menu scannable with no JavaScript;
+   the summary is the row you read, the form inside is the one you came to change. */
+.item {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+.item:first-of-type {
+  border-top: 0;
+}
+.item > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.item > summary .item-name {
+  flex: 1;
+  font-weight: 600;
+}
+.item > form {
+  margin-top: 16px;
 }

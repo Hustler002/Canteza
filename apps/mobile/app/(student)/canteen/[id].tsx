@@ -3,7 +3,8 @@ import { Alert, FlatList, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { MenuItem } from '@canteza/api';
 import { BRAND, formatPaise, toAppError } from '@canteza/shared';
-import { useCanteen, useMenu } from '../../../src/lib/queries';
+import { useCanteen, useFavorites, useMenu, useToggleFavorite } from '../../../src/lib/queries';
+import { useIdentity } from '../../../src/lib/session';
 import { useCart } from '../../../src/store/cart';
 import {
   Badge,
@@ -26,6 +27,7 @@ export default function CanteenMenu() {
   const menu = useMenu(canteenId);
   const cartUnits = useCart((state) => state.totalUnits());
   const cartCanteen = useCart((state) => state.canteenId);
+  const favourites = useFavorites();
 
   if (canteen.isLoading || menu.isLoading) return <Loading label="Loading menu…" />;
   if (menu.isError) {
@@ -42,6 +44,7 @@ export default function CanteenMenu() {
 
   const open = Boolean(canteen.data.is_open) && Boolean(canteen.data.is_accepting_orders);
   const showCartBar = cartUnits > 0 && cartCanteen === canteenId;
+  const favouriteIds = new Set((favourites.data ?? []).map((row) => row.menu_item_id));
 
   return (
     <Screen padded={false}>
@@ -64,7 +67,14 @@ export default function CanteenMenu() {
             ) : null}
           </View>
         }
-        renderItem={({ item }) => <MenuRow item={item} canteenId={canteenId} canOrder={open} />}
+        renderItem={({ item }) => (
+          <MenuRow
+            item={item}
+            canteenId={canteenId}
+            canOrder={open}
+            favourite={favouriteIds.has(item.id)}
+          />
+        )}
         ListEmptyComponent={
           <EmptyState title="Nothing on the menu" body="This canteen has not added items yet." />
         }
@@ -86,15 +96,19 @@ function MenuRow({
   item,
   canteenId,
   canOrder,
+  favourite,
 }: {
   item: MenuItem;
   canteenId: string;
   canOrder: boolean;
+  favourite: boolean;
 }) {
   const t = useTheme();
+  const identity = useIdentity();
   const [busy, setBusy] = useState(false);
   const quantity = useCart((state) => state.quantityOf(item.id));
   const { add, setQuantity, wouldConflict, replaceWith } = useCart();
+  const toggleFavourite = useToggleFavorite(identity.userId);
 
   const soldOut = !item.is_available;
 
@@ -130,6 +144,22 @@ function MenuRow({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
             <Body>{item.is_veg ? '🟢' : '🔴'}</Body>
             <Heading level="heading">{item.name}</Heading>
+            {/*
+             * A favourite is per dish, not per canteen: `favorites` is keyed
+             * (student_id, menu_item_id), and what a student wants again is the
+             * biryani rather than the counter that happens to sell it.
+             */}
+            <Pressable
+              onPress={() => toggleFavourite.mutate({ menuItemId: item.id, on: !favourite })}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: favourite }}
+              accessibilityLabel={
+                favourite ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`
+              }
+              hitSlop={t.hitSlop}
+            >
+              <Body>{favourite ? '♥' : '♡'}</Body>
+            </Pressable>
           </View>
           {item.description ? <Body muted>{item.description}</Body> : null}
           <Body>{formatPaise(item.price_paise)}</Body>

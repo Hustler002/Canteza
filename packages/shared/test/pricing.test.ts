@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeTotals,
   couponDiscount,
+  normaliseCouponCode,
   subtotal,
   type CartLine,
   type Coupon,
@@ -65,5 +66,20 @@ describe('pricing', () => {
   it('formats Indian currency and drops empty decimals', () => {
     expect(formatPaise(14000)).toBe('₹140');
     expect(formatPaise(14050)).toBe('₹140.50');
+  });
+});
+
+/**
+ * `place_order` looks a coupon up with `upper(trim(code))`. If the client ever stopped
+ * matching that, a student typing " save20 " would be told their valid code is invalid.
+ */
+describe('normaliseCouponCode', () => {
+  it('matches what place_order looks up: trimmed and upper case', () => {
+    expect(normaliseCouponCode('  save20 ')).toBe('SAVE20');
+    expect(normaliseCouponCode('welcome50')).toBe('WELCOME50');
+  });
+
+  it('leaves an empty field empty, so nothing is sent', () => {
+    expect(normaliseCouponCode('   ')).toBe('');
   });
 });

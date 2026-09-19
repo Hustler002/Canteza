@@ -18,10 +18,12 @@
 -- under tomorrow. Same reasoning as `campus_now()`.
 --
 -- On the discount column: it is reported, never netted into anybody's "revenue" here.
--- `canteen_received_paise` is the money that actually reaches the canteen today, which
--- is after the discount, because `total_paise` is what the student paid. Who *should*
--- fund a discount — especially an admin-issued one — is still open (ADR 008), so this
--- view states what happened and leaves the policy question to be settled elsewhere.
+-- `canteen_received_paise` is the money that actually reaches the canteen, which is after
+-- the discount, because `total_paise` is what the student paid. That is the settled
+-- policy, not an accident: the canteen funds every coupon, including an admin-issued one,
+-- and the platform's slice of the delivery fee is never touched by one (ADR 008). The
+-- discount stays its own column because it is the canteen's marketing spend and worth
+-- seeing on its own.
 
 create view public.revenue_by_canteen_day
 with (security_invoker = true) as

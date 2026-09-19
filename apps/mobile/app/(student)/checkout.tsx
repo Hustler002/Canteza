@@ -3,9 +3,16 @@ import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { readDefaultAddress } from '@canteza/api';
-import { computeTotals, formatPaise, PLATFORM_DEFAULTS, toAppError } from '@canteza/shared';
+import {
+  computeTotals,
+  formatPaise,
+  normaliseCouponCode,
+  PLATFORM_DEFAULTS,
+  toAppError,
+} from '@canteza/shared';
 import {
   useCanteen,
+  useCoupons,
   useHostels,
   useMenu,
   usePlaceOrder,
@@ -38,6 +45,7 @@ export default function Checkout() {
   const canteen = useCanteen(canteenId ?? '');
   const menu = useMenu(canteenId ?? '');
   const hostels = useHostels();
+  const coupons = useCoupons();
   const place = usePlaceOrder();
   const saveAddress = useSaveDefaultAddress(identity.userId);
 
@@ -46,6 +54,7 @@ export default function Checkout() {
   const [block, setBlock] = useState(saved?.block ?? '');
   const [room, setRoom] = useState(saved?.room ?? '');
   const [note, setNote] = useState('');
+  const [coupon, setCoupon] = useState('');
   const [saveAsDefault, setSaveAsDefault] = useState(saved === null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +87,8 @@ export default function Checkout() {
   const blocks = hostel?.blocks ?? [];
   const addressComplete = Boolean(hostelId && block && room.trim());
 
+  const code = normaliseCouponCode(coupon);
+
   async function submit() {
     setError(null);
     try {
@@ -89,6 +100,10 @@ export default function Checkout() {
         room,
         idempotencyKey,
         note,
+        // The database has the last word on every coupon rule -- the minimum, the
+        // per-student limit, the total cap. This only decides what to send, and
+        // sends nothing when the field is empty (rule 4).
+        couponCode: code || null,
       });
 
       if (saveAsDefault) {
@@ -168,6 +183,41 @@ export default function Checkout() {
             tone={saveAsDefault ? 'primary' : 'neutral'}
           />
         </Pressable>
+      </Card>
+
+      <Card>
+        <Heading level="heading">Coupon</Heading>
+        <Field
+          label="Code (optional)"
+          value={coupon}
+          onChangeText={setCoupon}
+          placeholder="WELCOME50"
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
+        {/*
+         * The discount is not shown in the summary below on purpose. `place_order`
+         * is what applies it -- it re-reads the coupon, checks the minimum and the
+         * redemption limits, and caps it at the subtotal -- so a figure computed
+         * here would be a guess that disagrees with the receipt whenever a rule
+         * bites. The order screen shows what was actually allowed.
+         */}
+        {(coupons.data ?? []).length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+            {(coupons.data ?? []).map((available) => (
+              <Choice
+                key={available.id}
+                label={
+                  available.min_order_paise > 0
+                    ? `${available.code} · over ${formatPaise(available.min_order_paise)}`
+                    : available.code
+                }
+                selected={code === available.code}
+                onPress={() => setCoupon(code === available.code ? '' : available.code)}
+              />
+            ))}
+          </View>
+        ) : null}
       </Card>
 
       <Card>

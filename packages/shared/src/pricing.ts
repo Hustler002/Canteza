@@ -43,6 +43,17 @@ export function subtotal(lines: readonly CartLine[]): Paise {
  * Discount is capped at the subtotal: a coupon never pays for delivery and never
  * produces a negative total (which would mean paying the student).
  */
+/**
+ * A coupon code as the database stores and matches it.
+ *
+ * `place_order` looks the code up with `upper(trim(code))`, so a student typing
+ * " save20 " has to reach the same row. Normalising here rather than only in SQL is
+ * what lets the checkout screen show the code it is actually about to send.
+ */
+export function normaliseCouponCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
 export function couponDiscount(coupon: Coupon | undefined, subtotalPaise: Paise): Paise {
   if (!coupon) return 0;
   if (subtotalPaise < coupon.minOrderPaise) {

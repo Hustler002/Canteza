@@ -14,6 +14,21 @@ export function paiseToRupees(paise: Paise): number {
   return paise / 100;
 }
 
+/**
+ * A price someone typed in rupees, as paise — or null if the database would refuse it.
+ *
+ * `menu_items.price_paise > 0` is a check constraint, and the test has to happen
+ * *after* the conversion: 0.004 is a positive number of rupees that rounds to zero
+ * paise, so a naive check on the typed value passes something the column rejects.
+ * Shared because both the admin form and the counter's screen ask the same question.
+ */
+export function parsePriceRupees(text: string): Paise | null {
+  const rupees = Number(text.trim());
+  if (!Number.isFinite(rupees)) return null;
+  const paise = rupeesToPaise(rupees);
+  return paise > 0 ? paise : null;
+}
+
 const formatter = new Intl.NumberFormat(BRAND.locale, {
   style: 'currency',
   currency: BRAND.currency,

@@ -1,32 +1,44 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addFavorite,
   claimDelivery,
+  createMenuItem,
+  createReview,
+  createTicket,
   getActiveOrder,
+  getOrderReview,
   getCanteen,
   getOrder,
   getShiftState,
   invalidationRoots,
   listActiveDeliveries,
+  listCanteenMenu,
   listCanteenOrders,
   listCanteens,
+  listCoupons,
   listCompletedDeliveries,
   listDeliveryQueue,
+  listFavorites,
   listHostels,
   listMenu,
+  listMyOrders,
+  listTickets,
   orderFilters,
   placeOrder,
   queryKeys,
   releaseDelivery,
+  removeFavorite,
   saveDefaultAddress,
   setOnline,
   subscribeToOrders,
   summariseDeliveries,
   transitionOrder,
+  updateMenuItem,
   type DefaultAddress,
   type PlaceOrderInput,
 } from '@canteza/api';
-import type { OrderStatus } from '@canteza/shared';
+import type { Insert, OrderStatus, Update } from '@canteza/shared';
 import { supabase } from './supabase';
 
 /**
@@ -76,6 +88,20 @@ export function useActiveOrder() {
   });
 }
 
+/**
+ * Everything this student has ordered, newest first.
+ *
+ * RLS limits it to their own; there is no student id in the query because there is
+ * nothing a `where` clause here could add to `orders_read`. The tracker on the home
+ * screen is the live one — this is the list you scroll to find last Tuesday's biryani.
+ */
+export function useMyOrders() {
+  return useQuery({
+    queryKey: queryKeys.myOrders(),
+    queryFn: () => listMyOrders(supabase),
+  });
+}
+
 export function useOrder(orderId: string) {
   return useQuery({
     queryKey: queryKeys.order(orderId),
@@ -89,6 +115,47 @@ export function useCanteenOrders(canteenId: string, statuses: readonly OrderStat
     queryKey: queryKeys.canteenOrders(canteenId, statuses.join(',')),
     queryFn: () => listCanteenOrders(supabase, statuses),
     enabled: Boolean(canteenId),
+  });
+}
+
+/**
+ * The counter's own menu, retired items included.
+ *
+ * A separate key from `useMenu`: the same canteen id would otherwise cache the
+ * student's filtered list and the counter's full one over each other, and whichever
+ * screen loaded second would show the wrong one.
+ */
+export function useCanteenMenu(canteenId: string) {
+  return useQuery({
+    queryKey: queryKeys.canteenMenu(canteenId),
+    queryFn: () => listCanteenMenu(supabase, canteenId),
+    enabled: Boolean(canteenId),
+  });
+}
+
+/** Both menu writes invalidate the whole canteen root, so the student's list follows. */
+function useMenuInvalidation() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: invalidationRoots.canteens });
+  };
+}
+
+export function useCreateMenuItem() {
+  const invalidate = useMenuInvalidation();
+  return useMutation({
+    mutationFn: (item: Insert<'menu_items'>) => createMenuItem(supabase, item),
+    onSuccess: invalidate,
+  });
+}
+
+/** A price edit, the sold-out switch and retiring are all one patch. */
+export function useUpdateMenuItem() {
+  const invalidate = useMenuInvalidation();
+  return useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: string; patch: Update<'menu_items'> }) =>
+      updateMenuItem(supabase, itemId, patch),
+    onSuccess: invalidate,
   });
 }
 
@@ -194,6 +261,82 @@ export function useShift(partnerId: string) {
   });
 
   return { query, setOnline: mutation };
+}
+
+/* -------------------------------------------------------------- engagement */
+
+/**
+ * Whether this order has been rated, and with what.
+ *
+ * `reviews.order_id` is unique, so "has it been rated" and "what does it say" are
+ * the same question and one query answers both.
+ */
+export function useOrderReview(orderId: string) {
+  return useQuery({
+    queryKey: queryKeys.orderReview(orderId),
+    queryFn: () => getOrderReview(supabase, orderId),
+    enabled: Boolean(orderId),
+  });
+}
+
+export function useCreateReview(orderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (review: Insert<'reviews'>) => createReview(supabase, review),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.orderReview(orderId) });
+    },
+  });
+}
+
+export function useFavorites() {
+  return useQuery({
+    queryKey: queryKeys.favorites(),
+    queryFn: () => listFavorites(supabase),
+  });
+}
+
+/**
+ * One switch rather than an add hook and a remove hook, because the button is one
+ * button and the caller already knows which way it is going.
+ */
+export function useToggleFavorite(studentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ menuItemId, on }: { menuItemId: string; on: boolean }) =>
+      on
+        ? addFavorite(supabase, studentId, menuItemId)
+        : removeFavorite(supabase, studentId, menuItemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.favorites });
+    },
+  });
+}
+
+/** Display only. `place_order` re-reads the coupon and is the one that decides. */
+export function useCoupons() {
+  return useQuery({
+    queryKey: queryKeys.coupons(),
+    queryFn: () => listCoupons(supabase),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMyTickets() {
+  return useQuery({
+    queryKey: queryKeys.tickets(),
+    queryFn: () => listTickets(supabase),
+  });
+}
+
+export function useCreateTicket() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ticket: Insert<'support_tickets'>) => createTicket(supabase, ticket),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.tickets });
+    },
+  });
 }
 
 /**

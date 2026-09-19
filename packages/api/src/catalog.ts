@@ -1,6 +1,6 @@
-import type { Row } from '@canteza/shared';
+import type { Insert, Row, Update } from '@canteza/shared';
 import type { CampusClient } from './client';
-import { unwrap, unwrapList } from './errors';
+import { unwrap, unwrapList, unwrapRequired } from './errors';
 
 /**
  * Browsing data: canteens, menus, hostels.
@@ -44,6 +44,62 @@ export async function listMenu(client: CampusClient, canteenId: string): Promise
 
 export async function listCategories(client: CampusClient): Promise<Category[]> {
   return unwrapList(client.from('food_categories').select('*').order('sort_order'));
+}
+
+/* ------------------------------------------------------- the counter's own menu */
+
+/**
+ * Every item this canteen has, retired ones included.
+ *
+ * The difference from `listMenu` is what a counter needs and a student must not get:
+ * `is_active = false` rows, so someone can bring a dish back. `menu_items_read`
+ * already scopes that to the caller's own canteen (or an admin), so this returns
+ * nothing extra to anyone else — the filter here is for ordering, not for safety.
+ */
+export async function listCanteenMenu(
+  client: CampusClient,
+  canteenId: string,
+): Promise<MenuItem[]> {
+  return unwrapList(
+    client
+      .from('menu_items')
+      .select('*')
+      .eq('canteen_id', canteenId)
+      .order('is_active', { ascending: false })
+      .order('sort_order')
+      .order('name'),
+  );
+}
+
+/**
+ * Menu writes.
+ *
+ * Plain table writes, not an RPC: `menu_items` withholds no column, and
+ * `menu_items_own_canteen` carries the WITH CHECK that ties every row to
+ * `my_canteen_id()`. A counter cannot write another canteen's item however it asks,
+ * and `canteen_id` here is the caller's own — the policy, not this argument, is what
+ * makes that true.
+ */
+export async function createMenuItem(
+  client: CampusClient,
+  item: Insert<'menu_items'>,
+): Promise<MenuItem> {
+  return unwrapRequired(
+    client.from('menu_items').insert(item).select('*').maybeSingle(),
+    'menu item',
+  );
+}
+
+/** Used for a price edit, the sold-out switch, and retiring — one patch, three callers. */
+export async function updateMenuItem(
+  client: CampusClient,
+  itemId: string,
+  patch: Update<'menu_items'>,
+): Promise<MenuItem> {
+  return unwrapRequired(
+    client.from('menu_items').update(patch).eq('id', itemId).select('*').maybeSingle(),
+    'menu item',
+  );
 }
 
 export async function listHostels(client: CampusClient): Promise<Hostel[]> {

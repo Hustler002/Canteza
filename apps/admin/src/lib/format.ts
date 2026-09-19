@@ -1,25 +1,12 @@
-import { BRAND, CAMPUS_TIMEZONE } from '@canteza/shared';
-
 /**
- * Dates, rendered on campus time.
+ * Admin-side presentation helpers.
  *
- * This app runs on a server whose clock is UTC, so leaving the timezone out would
- * print "19 Sep, 3:00 am" for an order placed at 8:30 in the evening. The formatters
- * are built once at module scope because `Intl.DateTimeFormat` is expensive enough
- * that a table of 100 rows notices.
+ * `formatCampusDateTime` used to live here. It moved to `packages/shared/time.ts`
+ * when the student's order history needed the same rule on the phone — the campus
+ * timezone is applied in exactly one place, and this re-export keeps every import in
+ * this app pointing where it always did.
  */
-
-const dateTime = new Intl.DateTimeFormat(BRAND.locale, {
-  timeZone: CAMPUS_TIMEZONE,
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-export function formatCampusDateTime(iso: string): string {
-  return dateTime.format(new Date(iso));
-}
+export { formatCampusDateTime } from '@canteza/shared';
 
 /** A status as an admin should read it: the stored value, just not shouting. */
 export function formatStatus(status: string): string {

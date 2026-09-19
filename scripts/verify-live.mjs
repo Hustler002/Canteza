@@ -49,6 +49,10 @@ let failures = 0;
 let checks = 0;
 /** Set once the canteen's real hours are known, so they are always put back. */
 let restoreHours = null;
+/** Set once the menu section has created a dish, so the campus never keeps it. */
+let removeTestDish = null;
+/** Favourites can be deleted by their owner, so this one always is. */
+let removeTestFavorite = null;
 
 function ok(label) {
   checks += 1;
@@ -344,6 +348,248 @@ async function main() {
     'the revenue view is scoped by security_invoker, not wide open',
     (canteenRevenue ?? []).every((row) => row.canteen_id !== canteenId),
   );
+
+  // -------------------------------------------------------------------------
+  section('5. Menu');
+  // -------------------------------------------------------------------------
+  // The counter's own screen writes `menu_items` directly rather than through an RPC,
+  // which is only safe because `menu_items_own_canteen` carries the WITH CHECK. These
+  // checks are that policy, exercised by the accounts it is written about -- the
+  // PGlite suite can assert the policy exists, but only a real sign-in proves the
+  // grant and the policy agree.
+  const dishName = `Verify Dish ${Date.now()}`;
+  const { data: dish, error: createDishError } = await people.mainCanteen.client
+    .from('menu_items')
+    .insert({ canteen_id: canteenId, name: dishName, price_paise: 4200 })
+    .select('id, is_available, is_active')
+    .maybeSingle();
+  check('a canteen adds a dish to its own menu', Boolean(dish), createDishError?.message);
+
+  if (dish) {
+    removeTestDish = async () => {
+      // Never ordered, so nothing references it and the FK does not object.
+      await people.mainCanteen.client.from('menu_items').delete().eq('id', dish.id);
+    };
+
+    const { data: soldOut } = await people.mainCanteen.client
+      .from('menu_items')
+      .update({ is_available: false })
+      .eq('id', dish.id)
+      .select('is_available')
+      .maybeSingle();
+    check('a canteen marks its own dish sold out', soldOut?.is_available === false);
+
+    // The student still sees it: `listMenu` returns unavailable items on purpose, so
+    // someone looking for Maggi reads "sold out" rather than finding it missing.
+    const { data: studentSees } = await people.riya.client
+      .from('menu_items')
+      .select('id, is_available')
+      .eq('id', dish.id)
+      .maybeSingle();
+    check('a sold-out dish is still visible to a student', studentSees?.is_available === false);
+
+    // A rival gets no error and no rows: RLS filters the update rather than refusing it.
+    const { data: rivalTouched } = await people.juiceCorner.client
+      .from('menu_items')
+      .update({ price_paise: 1 })
+      .eq('id', dish.id)
+      .select('id');
+    check("a rival canteen cannot price another canteen's dish", (rivalTouched ?? []).length === 0);
+
+    // WITH CHECK, from the other direction: writing a row onto someone else's menu.
+    const { error: rivalInsert } = await people.juiceCorner.client
+      .from('menu_items')
+      .insert({ canteen_id: canteenId, name: `Intruder ${Date.now()}`, price_paise: 100 });
+    check("a rival canteen cannot add to another canteen's menu", Boolean(rivalInsert));
+
+    const { data: retired } = await people.mainCanteen.client
+      .from('menu_items')
+      .update({ is_active: false })
+      .eq('id', dish.id)
+      .select('is_active')
+      .maybeSingle();
+    check('a canteen takes its own dish off the menu', retired?.is_active === false);
+
+    // And then it is gone from the student's menu, which filters `is_active`.
+    const { data: afterRetire } = await people.riya.client
+      .from('menu_items')
+      .select('id')
+      .eq('id', dish.id)
+      .eq('is_active', true);
+    check('a retired dish leaves the student menu', (afterRetire ?? []).length === 0);
+  }
+
+  // -------------------------------------------------------------------------
+  section('6. Order history');
+  // -------------------------------------------------------------------------
+  // What `listMyOrders` asks for, embed and all. The student's history screen is the
+  // first thing to read orders with their items in one round trip, and a PostgREST
+  // embed either resolves against the real foreign keys or it does not -- no offline
+  // suite can answer that.
+  const { data: myHistory, error: historyError } = await people.riya.client
+    .from('orders')
+    .select('id, code, status, total_paise, created_at, order_items(name_snapshot, quantity)')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  check(
+    'a student reads their own order history',
+    (myHistory?.length ?? 0) > 0,
+    historyError?.message,
+  );
+  check(
+    'the order just placed is in it',
+    (myHistory ?? []).some((row) => row.id === orderId),
+  );
+  check(
+    'every order in the history carries its own line items',
+    (myHistory ?? []).every((row) => (row.order_items?.length ?? 0) > 0),
+  );
+
+  // The boundary the screen depends on: no student id appears in that query, because
+  // `orders_read` is what limits it. If RLS were the thing that was wrong, this is
+  // where a stranger's order would appear.
+  const { data: arjunHistory } = await people.arjun.client
+    .from('orders')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  check(
+    "a student's history is their own and nobody else's",
+    (arjunHistory ?? []).every((row) => row.id !== orderId),
+  );
+
+  // -------------------------------------------------------------------------
+  section('7. Engagement');
+  // -------------------------------------------------------------------------
+  // Ratings, favourites, coupons and complaints are all plain table writes held up
+  // by policy alone, so this is the section that decides whether that was a good
+  // idea. `reviews_insert_own` is the strictest policy in the schema -- it checks in
+  // SQL that the order is the writer's own, delivered, and from the canteen being
+  // rated -- and it has never been exercised by a real sign-in until now.
+  //
+  // Note on cleanup: `reviews` and `support_tickets` grant no DELETE to anyone, on
+  // purpose, so the rows this section writes stay. That is the same bargain the
+  // script already makes by placing a real order every run; the ticket is at least
+  // closed by the admin below, which is a check in its own right.
+  const { error: reviewError } = await people.riya.client.from('reviews').insert({
+    order_id: orderId,
+    student_id: people.riya.userId,
+    canteen_id: canteenId,
+    food_rating: 5,
+    delivery_rating: 4,
+    comment: 'Left by npm run verify:live.',
+  });
+  check('a student rates the order they just received', !reviewError, reviewError?.message);
+
+  const { error: secondReview } = await people.riya.client.from('reviews').insert({
+    order_id: orderId,
+    student_id: people.riya.userId,
+    canteen_id: canteenId,
+    food_rating: 1,
+  });
+  check('the same order cannot be rated twice', Boolean(secondReview));
+
+  // The policy's real job: a delivered order is not a licence to rate *any* order.
+  const { error: strangerReview } = await people.arjun.client.from('reviews').insert({
+    order_id: orderId,
+    student_id: people.arjun.userId,
+    canteen_id: canteenId,
+    food_rating: 1,
+  });
+  check("a student cannot rate someone else's order", Boolean(strangerReview));
+
+  const dishToFavourite = menu[0].id;
+  // Insert, not upsert: `favorites` has no UPDATE grant because it has nothing to
+  // update, and PostgREST's upsert is `on conflict do update`, which asks for one.
+  const { error: favError } = await people.riya.client
+    .from('favorites')
+    .insert({ student_id: people.riya.userId, menu_item_id: dishToFavourite });
+  check('a student favourites a dish', !favError, favError?.message);
+  removeTestFavorite = async () => {
+    await people.riya.client
+      .from('favorites')
+      .delete()
+      .eq('student_id', people.riya.userId)
+      .eq('menu_item_id', dishToFavourite);
+  };
+
+  // The embed the home screen reads, `!inner` and all.
+  const { data: favourites } = await people.riya.client
+    .from('favorites')
+    .select('*, menu_items!inner(id, name, canteen_id)')
+    .eq('menu_items.is_active', true);
+  check(
+    'the favourite comes back with its dish attached',
+    (favourites ?? []).some((row) => row.menu_items?.id === dishToFavourite),
+  );
+
+  const { data: strangerFavourites } = await people.arjun.client.from('favorites').select('*');
+  check(
+    "one student's favourites are invisible to another",
+    (strangerFavourites ?? []).every((row) => row.student_id !== people.riya.userId),
+  );
+
+  // `coupons_read` hides inactive and out-of-window codes from a student, so what
+  // comes back here is exactly what the checkout screen may offer.
+  const { data: coupons, error: couponError } = await people.riya.client
+    .from('coupons')
+    .select('code, is_active, valid_until');
+  check('a student reads the usable coupon list', (coupons?.length ?? 0) > 0, couponError?.message);
+  check(
+    'no inactive coupon is offered to a student',
+    (coupons ?? []).every((row) => row.is_active),
+  );
+
+  const { data: ticket, error: ticketError } = await people.riya.client
+    .from('support_tickets')
+    .insert({
+      student_id: people.riya.userId,
+      order_id: orderId,
+      subject: 'Raised by npm run verify:live',
+      body: 'Filed and closed by the verification script.',
+    })
+    .select('id, status')
+    .maybeSingle();
+  check('a student files a complaint', Boolean(ticket), ticketError?.message);
+
+  if (ticket) {
+    const { data: adminSees } = await people.admin.client
+      .from('support_tickets')
+      .select('id')
+      .eq('id', ticket.id);
+    check('an admin sees it in the queue', (adminSees ?? []).length === 1);
+
+    const { data: otherStudentSees } = await people.arjun.client
+      .from('support_tickets')
+      .select('id')
+      .eq('id', ticket.id);
+    check('another student cannot read it', (otherStudentSees ?? []).length === 0);
+
+    // UPDATE is granted to `authenticated`, but `support_tickets_admin` is the only
+    // UPDATE policy -- so a student's own ticket filters to zero rows rather than
+    // erroring. Nobody marks their own complaint resolved.
+    const { data: selfResolve } = await people.riya.client
+      .from('support_tickets')
+      .update({ status: 'resolved' })
+      .eq('id', ticket.id)
+      .select('id');
+    check('a student cannot resolve their own complaint', (selfResolve ?? []).length === 0);
+
+    const { data: resolved, error: resolveError } = await people.admin.client
+      .from('support_tickets')
+      .update({ status: 'closed', resolution: 'Closed by the verification script.' })
+      .eq('id', ticket.id)
+      .select('status, resolution')
+      .maybeSingle();
+    check('an admin resolves it', resolved?.status === 'closed', resolveError?.message);
+
+    const { data: studentReads } = await people.riya.client
+      .from('support_tickets')
+      .select('resolution')
+      .eq('id', ticket.id)
+      .maybeSingle();
+    check('the student reads what was done about it', Boolean(studentReads?.resolution));
+  }
 }
 
 main()
@@ -358,6 +604,20 @@ main()
         await restoreHours();
       } catch (error) {
         console.error(`Could not restore canteen hours: ${error.message}`);
+      }
+    }
+    if (removeTestDish) {
+      try {
+        await removeTestDish();
+      } catch (error) {
+        console.error(`Could not remove the test dish: ${error.message}`);
+      }
+    }
+    if (removeTestFavorite) {
+      try {
+        await removeTestFavorite();
+      } catch (error) {
+        console.error(`Could not remove the test favourite: ${error.message}`);
       }
     }
     console.log(`\n${checks - failures}/${checks} checks passed.`);

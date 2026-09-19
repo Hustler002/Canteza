@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import {
   formatPaise,
@@ -55,6 +56,7 @@ const ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
 
 export default function CanteenOrders() {
   const t = useTheme();
+  const router = useRouter();
   const identity = useIdentity();
   const { signOut } = useSession();
   const [tab, setTab] = useState(TABS[0]!);
@@ -80,7 +82,10 @@ export default function CanteenOrders() {
       <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Heading level="display">Orders</Heading>
-          <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+            <Button label="Menu" variant="secondary" onPress={() => router.push('/menu')} />
+            <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+          </View>
         </View>
 
         <View style={{ flexDirection: 'row', gap: t.space.sm }}>

@@ -189,9 +189,10 @@ export default async function AnalyticsPage({
           paid, less our fee. We take ₹2 of the ₹10 delivery fee and nothing on food.
         </p>
         <p className="muted">
-          A discount therefore comes out of the canteen&rsquo;s share today, <em>including</em> a
-          code an admin issued. Whether that is right is still undecided (ADR 008), so discounts are
-          shown here as their own figure rather than folded into either side&rsquo;s revenue.
+          A <strong>discount</strong> comes out of the canteen&rsquo;s share, <em>including</em> a
+          code an admin issued &mdash; our fee is a slice of the delivery fee and a coupon never
+          touches it (ADR 008). It is shown as its own figure because it is the canteen&rsquo;s
+          marketing spend, not a cost of selling the food.
         </p>
       </section>
     </>

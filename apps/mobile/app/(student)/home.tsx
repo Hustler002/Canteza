@@ -5,6 +5,7 @@ import type { Canteen } from '@canteza/api';
 import {
   useActiveOrder,
   useCanteens,
+  useFavorites,
   useOrdersRealtime,
   orderFilters,
 } from '../../src/lib/queries';
@@ -13,6 +14,7 @@ import { useCart } from '../../src/store/cart';
 import {
   Badge,
   Body,
+  Button,
   Card,
   EmptyState,
   ErrorState,
@@ -30,6 +32,7 @@ export default function StudentHome() {
   const activeOrder = useActiveOrder();
   const cartUnits = useCart((state) => state.totalUnits());
   const cartCanteen = useCart((state) => state.canteenId);
+  const favourites = useFavorites();
 
   // Live status without polling: an event invalidates, the query refetches.
   useOrdersRealtime(orderFilters.forStudent(identity.userId));
@@ -54,11 +57,25 @@ export default function StudentHome() {
         contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
         ListHeaderComponent={
           <View style={{ gap: t.space.lg, marginBottom: t.space.sm }}>
-            <View style={{ gap: t.space.xs }}>
-              <Heading level="display">
-                Hi {identity.profile.full_name?.split(' ')[0] || 'there'}
-              </Heading>
-              <Body muted>What are you eating tonight?</Body>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: t.space.md,
+              }}
+            >
+              <View style={{ flex: 1, gap: t.space.xs }}>
+                <Heading level="display">
+                  Hi {identity.profile.full_name?.split(' ')[0] || 'there'}
+                </Heading>
+                <Body muted>What are you eating tonight?</Body>
+              </View>
+              <Button
+                label="Your orders"
+                variant="secondary"
+                onPress={() => router.push('/my-orders')}
+              />
             </View>
 
             {order ? (
@@ -73,6 +90,29 @@ export default function StudentHome() {
                   </Body>
                 </Card>
               </Pressable>
+            ) : null}
+
+            {(favourites.data ?? []).length > 0 ? (
+              <Card>
+                <Heading level="heading">Your favourites</Heading>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+                  {(favourites.data ?? []).map((row) =>
+                    row.menu_items ? (
+                      <Pressable
+                        key={row.menu_item_id}
+                        onPress={() => router.push(`/canteen/${row.menu_items!.canteen_id}`)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${row.menu_items.name}, go to its canteen`}
+                      >
+                        <Badge
+                          label={`${row.menu_items.name} · ${formatPaise(row.menu_items.price_paise)}`}
+                          tone="primary"
+                        />
+                      </Pressable>
+                    ) : null,
+                  )}
+                </View>
+              </Card>
             ) : null}
 
             {cartUnits > 0 && cartCanteen ? (

@@ -12,6 +12,8 @@ export const queryKeys = {
   canteens: () => ['canteens'] as const,
   canteen: (canteenId: string) => ['canteens', canteenId] as const,
   menu: (canteenId: string) => ['canteens', canteenId, 'menu'] as const,
+  /** The counter's own view of it: retired items included, which a student never sees. */
+  canteenMenu: (canteenId: string) => ['canteens', canteenId, 'menu', 'all'] as const,
   categories: () => ['categories'] as const,
   hostels: () => ['hostels'] as const,
 
@@ -33,6 +35,13 @@ export const queryKeys = {
   shift: (partnerId: string) => ['shift', partnerId] as const,
 
   notifications: (userId: string) => ['notifications', userId] as const,
+
+  /** Engagement: the things that hang off an order rather than move it. */
+  orderReview: (orderId: string) => ['orders', orderId, 'review'] as const,
+  canteenReviews: (canteenId: string) => ['canteens', canteenId, 'reviews'] as const,
+  favorites: () => ['favorites'] as const,
+  coupons: () => ['coupons'] as const,
+  tickets: (status?: string) => (status ? (['tickets', status] as const) : (['tickets'] as const)),
 } as const;
 
 /** Broad invalidation targets — prefer these over surgical keys (ADR 004). */
@@ -40,4 +49,6 @@ export const invalidationRoots = {
   orders: ['orders'] as const,
   canteens: ['canteens'] as const,
   notifications: ['notifications'] as const,
+  favorites: ['favorites'] as const,
+  tickets: ['tickets'] as const,
 } as const;

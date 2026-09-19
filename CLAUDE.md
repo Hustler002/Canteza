@@ -8,10 +8,10 @@
 
 ## Where the project is right now
 
-**Phase 6 complete, verified end to end against a real Supabase — including every admin
-page in a browser.** 299 tests green offline, plus 34/34 live checks
-(`npm run verify:live`) covering auth, realtime, the full order path and RLS.
-**Phase 7 (ratings, favourites, coupons, complaints) is next.**
+**Phase 7 complete.** 315 tests green offline, plus 59/59 live checks
+(`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
+management, order history and engagement. Every admin page has been driven in a
+browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -24,8 +24,8 @@ page in a browser.** 299 tests green offline, plus 34/34 live checks
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
 ✅ Phase 6  admin: orders, canteens, staff, accounts, hostels, revenue + 99
-⬜ Phase 7  ratings, favourites, reorder, coupons, complaints          ← NEXT
-⬜ Phase 8  push, Razorpay, Sentry, deploy
+✅ Phase 7  menu, history, ratings, reorder, favourites, coupons, support
+⬜ Phase 8  push, Razorpay, Sentry, deploy                          ← NEXT
 ```
 
 Full plan: [`docs/roadmap.md`](./docs/roadmap.md).
@@ -223,12 +223,22 @@ Departures from the original brief, all argued in the ADRs:
 - **No timeout on unpaid prepaid orders.** `pending -> accepted` is blocked until payment
   is `success`, but nothing cancels an order the student abandoned at the payment screen;
   it needs a scheduled job and lands with Razorpay in Phase 8.
-- **Coupon funding is undecided** — a discount currently comes out of the canteen's share
-  even when an admin issued the code. Decide before Phase 7 ships coupons (ADR 008).
+- **No admin page for coupons.** `coupons_admin` lets an admin do anything to the table
+  and nothing in the dashboard does; codes are created in SQL. A page, no migration.
+- **Nothing reads `notifications`.** `notify_order` writes a row per transition and
+  `keys.ts` reserves the query key, but there is no API function and no inbox. Phase 8
+  covers _push_; the in-app list is unowned.
+- **No student search.** context.md §2 promises browse **and search**; `home.tsx` lists
+  canteens with no search input, and there is no cross-canteen dish search.
 - **The mobile app has never run against the live project.** Every admin page has now
   been driven in a browser against real data, but `apps/mobile` has only ever been
   bundled, not run — no student has placed an order from a device, and the realtime
   tracker has only been proven from Node. That needs Expo on a phone or simulator.
+  The counter's menu screen is in the same position: the **data path underneath it is
+  proven live** (`verify:live` §5, seven checks through real canteen and student
+  sign-ins) and it compiles into the Android bundle, but nobody has tapped the buttons.
+  Running it needs a device — `expo start --web` would want `react-native-web` and
+  `react-dom`, two dependencies this app does not have and should not grow for a test.
 - PGlite is single-connection, so the race tests verify the **guard** sequentially (A claims,
   B is refused) rather than firing two transactions in parallel. The atomicity is Postgres's
   own, but when Docker is available, re-run the claim scenario against `supabase start` with
@@ -415,6 +425,98 @@ pages match rather than inventing a second way:
   login redirect never fired and, worse, the session was never refreshed. The build
   output printing `ƒ Proxy (Middleware)` is the check that it is wired up.
 
+## Phase 7 screens
+
+```
+admin   app/(dashboard)/canteens/[id]/menu/    add, edit, retire, restore a dish
+admin   app/(dashboard)/support/               the complaints queue: status + resolution
+admin   src/lib/menu-form.ts                   FormData -> a row, pure and tested
+mobile  app/(canteen)/menu.tsx                 the counter's own menu
+mobile  app/(student)/my-orders.tsx            order history
+mobile  app/(student)/support.tsx              file a complaint, read the answer
+mobile  app/(student)/order/[id].tsx           + rate, + reorder, + report a problem
+mobile  app/(student)/canteen/[id].tsx         + a heart on every dish
+mobile  app/(student)/home.tsx                 + the favourites strip
+mobile  app/(student)/checkout.tsx             + the coupon field
+api     catalog.ts     listCanteenMenu / createMenuItem / updateMenuItem
+api     engagement.ts  reviews, favourites, coupons, tickets
+shared  money.ts   parsePriceRupees            the price rule, both surfaces
+shared  time.ts    formatCampusDateTime        campus time, both surfaces
+shared  pricing.ts normaliseCouponCode         matches place_order's upper(trim())
+```
+
+**Two surfaces, one table, and they are not the same screen.** The admin page is for
+stocking a canteen — categories, sort order, image, description — which happens once,
+before anyone is posted to the counter. The counter's screen is built around the one
+thing that happens during service: the samosas run out and someone says so in one tap.
+So a dish collapsed on mobile shows its sold-out switch and nothing else, and the name
+and price hide behind a tap. Adding a dish there asks for a name and a price only; the
+rest is setup the admin already did.
+
+`listCanteenMenu` is a separate query key (`queryKeys.canteenMenu`) from the student's
+`useMenu`, because the same canteen id would otherwise cache the filtered list and the
+full one over each other and whichever screen loaded second would show the wrong one.
+
+**Order history is `my-orders.tsx`, not `orders.tsx`** — rule 19, met for real rather
+than in the abstract. `(canteen)/orders.tsx` already resolves to `/orders`, so a second
+`orders.tsx` in `(student)` would have been the same route, and a student tapping
+through would have landed on the counter's board. It reads `listMyOrders`, which was
+written in Phase 4 and had never had a caller. No student id appears in that query:
+`orders_read` is what limits it, and `verify:live` §6 is where that is proven rather
+than assumed.
+
+`formatCampusDateTime` moved from `apps/admin/src/lib/format.ts` to
+`packages/shared/time.ts` when the phone needed the same rule — the campus timezone is
+applied in one place. The admin file re-exports it, so every import there is unchanged.
+
+**Engagement is policy all the way down.** Ratings, favourites, coupon reads and
+complaints are plain table writes with no RPC anywhere, because each already carries a
+policy that says exactly who may write what. The strictest is `reviews_insert_own`,
+which checks in SQL that the order is the writer's own _and_ delivered _and_ from the
+canteen being rated — a `security definer` function would have restated that in a
+second place and could drift from it. `verify:live` §7 is where that bet is settled,
+with real sign-ins.
+
+Four things worth keeping straight:
+
+- **`favorites` gets an `insert`, never an `upsert`.** The table is nothing but its
+  primary key, so it has no UPDATE grant — and PostgREST's upsert is
+  `insert ... on conflict do update`, which asks for one and is refused with 42501. A
+  duplicate key means the dish is already a favourite, which is the outcome wanted, so
+  `addFavorite` swallows 23505 and nothing else.
+- **The checkout does not show the discount.** `place_order` applies it — re-reading the
+  coupon, checking the minimum and the per-student limit, capping it at the subtotal —
+  so a figure computed on the phone would be a guess that disagrees with the receipt the
+  moment a rule bites. The field sends a code; the order screen shows what was allowed.
+- **Reorder copies ids and quantities, and nothing else** (rule 17), so it is charged at
+  today's prices rather than the receipt's. Retired and sold-out dishes are dropped,
+  because `place_order` re-reads every price from `menu_items` and a line pointing at a
+  dish that is off the menu cannot be priced at all. The screen says so before you tap.
+- **A student can file a complaint and read the answer, but never resolve it.**
+  `support_tickets_admin` is the only UPDATE policy, so a student updating their own
+  ticket filters to zero rows rather than erroring.
+
+**Where this one departs from the Phase 6 pattern, and why.** Every other admin write in
+this app goes through a `security definer` RPC, because `canteens`, `profiles` and
+`delivery_partners` all withhold columns at the `GRANT` and a Postgres grant is per role
+— an admin is `authenticated` like everyone else. `menu_items` withholds nothing: a price
+is exactly what the counter is meant to write, and `menu_items_admin` /
+`menu_items_own_canteen` already carry the WITH CHECK. So this is a plain table write,
+the same call `hostels/actions.ts` makes and for the same stated reason. What was missing
+was never the authorisation — it was any code at all that wrote the table.
+
+Three things the page settles:
+
+- **An item is retired, never deleted.** `order_items.menu_item_id` references it with no
+  `on delete` clause, so Postgres refuses to remove anything anyone has ordered — the FK
+  is kept on purpose (snapshot for display, FK for reorder and analytics). Retiring is the
+  only retirement path, and `listMenu` filters `is_active`, so it leaves every menu.
+- **Sold out and retired are different states.** `is_available` hides an item for today
+  and keeps it on the menu — `listMenu` deliberately returns it so a student sees Maggi
+  greyed out rather than silently absent. The item count badge counts the live ones.
+- **Each item is a `<details>`.** A menu is a list to scan and occasionally one row to
+  edit; 28 open forms would bury it. Native, so the page stays a server component.
+
 ## Next session: Phase 7
 
 Phase 6 is finished — what it built and why is above. The five areas it covered, for
@@ -446,12 +548,29 @@ it says so when it truncates — add a cursor when a real dataset makes that bit
 **no "you are here" in the nav**, because highlighting it would make the nav a client
 component for one line of styling. The accounts page has the same 100-row ceiling.
 
-**Phase 7 starts here.** Ratings, favourites, reorder, coupons and complaints — every one
-of those tables already exists from Phase 2 (`reviews`, `favorites`, `coupons`,
-`coupon_redemptions`, `support_tickets`) with RLS and client grants, and none has a
-screen. **Settle the coupon-funding question first** (see Known gaps and ADR 008): the
-analytics page reports discounts as their own figure precisely because it is undecided,
-and shipping coupons will force the answer.
+**Phase 7 is done.** Menu management on both surfaces, order history, ratings, reorder,
+favourites, coupons at checkout and complaints end to end — see Phase 7 screens above.
+Both admin pages were driven in a browser against the live project; the mobile screens
+have their data paths proven by `verify:live` §§5–7 but have never been tapped on a
+device.
+
+The shared piece worth knowing about: **`parsePriceRupees` lives in `money.ts`**, not in
+either app. The rule it encodes is that `price_paise > 0` has to be checked _after_ the
+conversion, because 0.004 is a positive number of rupees that rounds to zero paise — a
+naive check on the typed value passes something the column rejects. The admin form and
+the counter's text input ask the same question, so it is written once (rule 1, rule 2).
+
+Two notes that outlived the work:
+
+- **Coupon funding is settled: the canteen absorbs every discount**, including a code an
+  admin issued; the platform's ₹2 of the delivery fee is never touched by one (ADR 008).
+  The maths already worked this way — `total_paise` is net of the discount and
+  `platform_fee_paise` is flat — so nothing in `place_order` or `revenue_by_canteen_day`
+  changed when it was decided.
+- **There is still no admin page for coupons.** A student can use a code and the
+  checkout offers whatever `coupons_read` returns, but creating or retiring one is a SQL
+  statement today. `coupons_admin` already grants an admin everything, so it is a page
+  and no migration — it lands whenever someone needs to run a promotion.
 
 **Still unverified:** `apps/mobile`. The database, the API layer and the whole admin
 dashboard are proven against the live project; the Expo app is not. Run

@@ -48,6 +48,11 @@ export default async function CanteenEditPage({
           )}
         </div>
         {error ? <p className="error">{error}</p> : null}
+        <div className="toolbar">
+          <Link className="button secondary" href={`/canteens/${id}/menu`}>
+            Menu
+          </Link>
+        </div>
       </section>
 
       <section className="card">

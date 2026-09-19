@@ -132,9 +132,21 @@ settlements. A `CHECK` keeps it at or below the delivery fee it is taken from.
 - **A transfer leaves a dead posting row behind.** That is the price of historical
   integrity, and it is queryable as employment history rather than being noise.
 
-## Open question, deferred
+## Coupon funding — settled
 
-Who funds a coupon discount? Today it reduces the food subtotal, so the **canteen** absorbs
-it even if an admin created the code. That is fine while coupons are unused, but before
-Phase 7 ships them, decide whether platform-issued discounts should come out of the
-platform's share instead.
+**The canteen funds every discount, including a code an admin issued.** The platform's
+₹2 of the delivery fee is not touched by a coupon.
+
+That is what the code already did, so this settles a question rather than changing a
+number: a discount reduces `total_paise`, `platform_fee_paise` is a flat slice of the
+delivery fee, and `canteen_received_paise` is `total - platform_fee`. Nothing in
+`place_order` or `revenue_by_canteen_day` needed a change.
+
+Why this way round: a coupon exists to sell the canteen's food, and only the canteen can
+judge what margin it can give away. A platform-funded discount would make our revenue a
+function of how many codes are in circulation, which is how a ₹2-per-order business
+quietly goes negative. If a campus-wide promotion ever needs platform funding, that is a
+funding _source_ column on `coupons`, not a change to this default.
+
+Discounts stay a reported figure on the analytics page — they are still worth seeing on
+their own, now as the canteen's marketing spend rather than as an unanswered question.
