@@ -9,7 +9,7 @@
 ## Where the project is right now
 
 **Phase 6 in progress.** The admin dashboard searches every order, reads its status trail,
-and manages canteens: 241 tests green.
+and creates, edits, staffs and disables canteens: 256 tests green.
 **Next** — delivery staff, students, hostels, analytics.
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
@@ -22,7 +22,7 @@ and manages canteens: 241 tests green.
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
-🔷 Phase 6  admin: orders search, status trail, canteens + 42 tests  ← IN PROGRESS
+🔷 Phase 6  admin: orders, status trail, canteens + staff + 57 tests ← IN PROGRESS
 ⬜ Phase 7  ratings, favourites, coupons, complaints, analytics
 ⬜ Phase 8  push, Razorpay, Sentry, deploy
 ```
@@ -95,9 +95,11 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `..._harden_default_privileges.sql` | **Security.** Revokes Supabase's blanket grants, restates the real ones |
 | `..._admin_set_partner_active.sql`  | Admin ends or restores a delivery posting; canteen id is explicit       |
 | `..._canteen_column_grants.sql`     | **Security.** Staff write hours + pause only; admin writes via RPC      |
+| `..._canteen_create.sql`            | `admin_create_canteen`; canteens lose client INSERT and DELETE          |
+| `..._canteen_staff_attach.sql`      | Attach/detach staff; writes the role with the row. RPC-only table       |
 | `seed.sql`                          | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
 | `seed-users.mjs`                    | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                             | 130 tests on in-process Postgres — see `test/README.md`                 |
+| `test/`                             | 145 tests on in-process Postgres — see `test/README.md`                 |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -112,6 +114,10 @@ admin_set_partner_active(profile_id, canteen_id, active)      -- admin retires o
 admin_update_canteen(canteen_id, name, description, phone, image_url,
                      min_order_paise, opens_at, closes_at, accepting)
 admin_set_canteen_active(canteen_id, active)                  -- disable, never delete
+admin_create_canteen(name, description, phone, image_url,
+                     min_order_paise, opens_at, closes_at) -> uuid  -- starts disabled
+admin_attach_canteen_staff(profile_id, canteen_id)   -- moves them if already posted
+admin_detach_canteen_staff(profile_id, canteen_id)   -- and puts the role back
 canteen_set_partner_active(profile_id, active)                -- canteen retires own staff
 ```
 
@@ -276,6 +282,9 @@ app/(dashboard)/orders/page.tsx   search + status/canteen/date filters, 100 newe
 app/(dashboard)/orders/[id]/      one order: people, address, items, money, trail
 app/(dashboard)/canteens/         list with live open/closed, disable/enable
 app/(dashboard)/canteens/[id]/    edit: name, hours, min order, pause switch
+app/(dashboard)/canteens/new/     create; the canteen starts disabled
+app/(dashboard)/canteens/canteen-fields  the form both of them render
+app/(dashboard)/canteens/staff-section   who works this counter, attach/detach
 app/(dashboard)/canteens/actions  the first server actions in this repo
 src/lib/order-filters.ts          URL -> query, pure and tested
 src/lib/canteen-form.ts           FormData -> RPC args, pure and tested
@@ -307,6 +316,15 @@ pages match rather than inventing a second way:
   here never `update` a table directly and never return state to a client component:
   they call a `security definer` function and `redirect` with `?error=` or `?saved=`.
   That keeps every admin page a server component and makes a failed save a link.
+- **A membership and a role are written together, or not at all.** `my_canteen_id()`
+  reads `canteen_staff` and never looks at `profiles.role`: the row grants the data, the
+  role picks the app. `admin_attach_canteen_staff` writes both, which is why
+  `canteen_staff` has no client write grant either. Neither function will demote an
+  admin who also works a counter.
+- **A canteen is disabled, never deleted.** `canteens` now has no client INSERT or
+  DELETE grant at all: creating goes through `admin_create_canteen` and retiring through
+  `admin_set_canteen_active`. Deleting a canteen would cascade its staff and delivery
+  partner rows and orphan `orders.canteen_id`, so the table simply does not offer it.
 - **A mutating control is a `<form>`, never a `<Link>`.** The disable switch POSTs. A GET
   that changes state gets fired by any prefetcher that touches the page.
 - **`proxy.ts` must live in `src/`.** This app has a `src/` directory, so Next looks for
@@ -321,13 +339,18 @@ pages match rather than inventing a second way:
 against data and permissions that already exist:
 
 1. ~~**Orders**: search, filter, status history trail.~~ ✅ done
-2. ~~**Canteens**: edit hours, disable.~~ ✅ done — **create** is still open, and a new
-   canteen lands with no staff and no menu, so it cannot take an order until both exist.
+2. ~~**Canteens**: create, edit hours, disable.~~ ✅ done. A new canteen is created
+   **disabled** and has no staff and no menu, so the admin adds both and then enables it
+   from the list. Attaching a staff account is still missing — it belongs with the users
+   page, because `canteen_staff_one_canteen` makes "attach" sometimes mean "move".
 3. **Delivery staff**: onboard and transfer with `admin_set_partner_canteen`, retire or
    restore with `admin_set_partner_active` (the SQL and its tests landed with the orders
    slice; the UI control did not). Note a new posting starts **off shift** — the partner
    goes online themselves.
 4. **Students, hostels**: manage. `admin_set_role` is the only path to a role change.
+   Note the admin app cannot see anyone's **email** — that lives in `auth.users`, which
+   PostgREST does not expose — so people are identified by name and phone. If that is
+   not enough to tell two students apart, the fix is a view or an RPC, not a client read.
 5. **Analytics**: platform revenue is `sum(platform_fee_paise)` on delivered orders —
    our cut only. Canteen revenue is subtotal + (delivery fee − platform fee).
 

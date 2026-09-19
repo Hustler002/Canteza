@@ -86,6 +86,12 @@ h3 {
   padding: 20px;
   display: grid;
   gap: 12px;
+  /* A grid or flex item's automatic minimum size is its content, so a wide child --
+     a <select> sized to its longest option, a long unbroken string -- pushes the card
+     wider than the viewport instead of being constrained by it. Setting this on every
+     container in the chain is what actually stops the page scrolling sideways on a
+     phone; doing it on the child alone does not, because the parent has already grown. */
+  min-width: 0;
 }
 
 .grid {
@@ -120,6 +126,12 @@ h3 {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  /* Anchors styled as buttons appear in the toolbar, the table and the page header;
+     centring and the underline reset belong here rather than at each call site. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 .button:disabled {
   opacity: 0.5;
@@ -201,6 +213,7 @@ h3 {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  min-width: 0;
 }
 .toolbar input,
 .toolbar select {
@@ -211,15 +224,16 @@ h3 {
   background: var(--surface);
   color: var(--text);
   font-size: 15px;
+  /* A <select> takes its intrinsic width from its longest option, and a flex item's
+     default `min-width: auto` refuses to shrink below that — together they push the
+     page wider than the phone. Both are needed: min-width lets it shrink, max-width
+     stops it starting too wide. Long option text then truncates instead of the whole
+     page scrolling sideways. */
+  min-width: 0;
+  max-width: 100%;
 }
 .toolbar input[type='search'] {
   flex: 1 1 200px;
-}
-.toolbar .button {
-  min-height: 44px;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
 }
 
 /* Tables are the one place the 1120px shell is not wide enough on a laptop, so the

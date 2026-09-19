@@ -24,6 +24,7 @@ export default async function CanteensPage({
   const params = await searchParams;
   const error = typeof params.error === 'string' ? params.error : null;
   const saved = typeof params.saved === 'string' ? params.saved : null;
+  const created = typeof params.created === 'string' ? params.created : null;
 
   const supabase = await createServerSupabase();
   const [all, open] = await Promise.all([
@@ -40,9 +41,19 @@ export default async function CanteensPage({
   return (
     <>
       <section className="card">
-        <h2>Canteens</h2>
+        <div className="topbar">
+          <h2>Canteens</h2>
+          <Link className="button" href="/canteens/new">
+            New canteen
+          </Link>
+        </div>
         {error ? <p className="error">{error}</p> : null}
         {saved ? <p className="muted">Saved {saved}.</p> : null}
+        {created ? (
+          <p className="muted">
+            Created {created}, disabled. Add its staff and menu, then enable it below.
+          </p>
+        ) : null}
         {all.error ? <p className="error">{all.error.message}</p> : null}
         <p className="muted">
           Disabling a canteen hides it from students immediately. Its orders, menu and staff stay

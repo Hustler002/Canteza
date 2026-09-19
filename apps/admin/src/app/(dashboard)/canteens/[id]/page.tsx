@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { paiseToRupees } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
 import type { SearchParams } from '@/lib/order-filters';
 import { updateCanteen } from '../actions';
+import { CanteenFields } from '../canteen-fields';
+import { StaffSection } from '../staff-section';
 
 /**
  * Edit one canteen.
@@ -50,84 +51,7 @@ export default async function CanteenEditPage({
 
       <section className="card">
         <form className="stack" action={updateCanteen.bind(null, id)}>
-          <div className="field">
-            <label htmlFor="name">Name</label>
-            <input id="name" name="name" defaultValue={canteen.name} maxLength={80} required />
-            <span className="muted">
-              Past orders keep the name they were placed under, so renaming does not rewrite any
-              receipt.
-            </span>
-          </div>
-
-          <div className="field">
-            <label htmlFor="description">Description</label>
-            <input id="description" name="description" defaultValue={canteen.description} />
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label htmlFor="opens_at">Opens</label>
-              <input
-                id="opens_at"
-                name="opens_at"
-                type="time"
-                defaultValue={canteen.opens_at.slice(0, 5)}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="closes_at">Closes</label>
-              <input
-                id="closes_at"
-                name="closes_at"
-                type="time"
-                defaultValue={canteen.closes_at.slice(0, 5)}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="min_order_rupees">Minimum order (₹)</label>
-              <input
-                id="min_order_rupees"
-                name="min_order_rupees"
-                type="number"
-                min="0"
-                step="1"
-                defaultValue={paiseToRupees(canteen.min_order_paise)}
-              />
-            </div>
-          </div>
-
-          <p className="muted">
-            A closing time earlier than the opening time is a window that crosses midnight — Night
-            Canteen runs 20:00 to 02:00. Setting both to the same time means open around the clock.
-          </p>
-
-          <div className="row">
-            <div className="field">
-              <label htmlFor="phone">Phone</label>
-              <input id="phone" name="phone" defaultValue={canteen.phone ?? ''} />
-            </div>
-            <div className="field">
-              <label htmlFor="image_url">Image URL</label>
-              <input id="image_url" name="image_url" defaultValue={canteen.image_url ?? ''} />
-            </div>
-          </div>
-
-          <label className="check">
-            <input
-              type="checkbox"
-              name="is_accepting_orders"
-              defaultChecked={canteen.is_accepting_orders}
-            />
-            <span>
-              Accepting orders
-              <span className="muted">
-                {' '}
-                — the counter&rsquo;s own pause switch, separate from the hours above.
-              </span>
-            </span>
-          </label>
+          <CanteenFields canteen={canteen} />
 
           <div className="toolbar">
             <button className="button" type="submit">
@@ -139,6 +63,8 @@ export default async function CanteenEditPage({
           </div>
         </form>
       </section>
+
+      <StaffSection supabase={supabase} canteenId={id} />
     </>
   );
 }

@@ -120,7 +120,31 @@ per role and admins are `authenticated` too, so the fix narrows the grant to
 into `admin_update_canteen` / `admin_set_canteen_active` — the same `security definer`
 pattern as `admin_set_role`.
 
-**Left:** create a canteen, delivery staff, students, hostels, analytics.
+Create followed. A new canteen is inserted **disabled**: the column default is `true` and
+`canteens_public` exposes a canteen the instant it exists, so the default would have put an
+empty, unstaffed canteen on every student's list on day one. Same shape as a new delivery
+posting starting off shift — created, then deliberately turned on.
+
+That also let `canteens` give up its last blanket grants. INSERT had exactly one consumer
+and it is now `admin_create_canteen`; DELETE never had one, because deleting a canteen
+would cascade its staff and delivery-partner rows and orphan `orders.canteen_id`. Both are
+revoked, so the table is RPC-only for writes apart from the three staff columns — the same
+shape `orders` has had since Phase 2.
+
+Staff attachment closed the loop on creating a canteen: create it disabled, attach an
+account, add a menu, enable it. The section sits on the canteen's own page, because that
+is where the question comes up and there is no canteen picker to build.
+
+Two things move together there. `my_canteen_id()` reads `canteen_staff` and never looks
+at `profiles.role`, so the row is what grants the data while the role only decides which
+app the person lands in — writing one without the other gives someone a counter screen
+with no data, or a canteen's orders behind a student's menu. Attaching writes both, moves
+anyone already posted elsewhere, and refuses a person who still has an active delivery
+posting: `transition_order` resolves canteen before delivery, so they could claim a
+delivery and then never be able to mark it picked up. `canteen_staff` lost its client
+write grant in the same migration.
+
+**Left:** delivery staff, students, hostels, analytics.
 
 ## Phase 7 — secondary features
 

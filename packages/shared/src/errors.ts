@@ -20,6 +20,7 @@ export const ERROR_CODES = {
   BELOW_MINIMUM_ORDER: 'BELOW_MINIMUM_ORDER',
   COUPON_INVALID: 'COUPON_INVALID',
   DELIVERY_ALREADY_CLAIMED: 'DELIVERY_ALREADY_CLAIMED',
+  ALREADY_DELIVERY_PARTNER: 'ALREADY_DELIVERY_PARTNER',
   OFF_SHIFT: 'OFF_SHIFT',
   DUPLICATE_REQUEST: 'DUPLICATE_REQUEST',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
@@ -50,6 +51,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   BELOW_MINIMUM_ORDER: "You haven't reached this canteen's minimum order yet.",
   COUPON_INVALID: "That coupon can't be used on this order.",
   DELIVERY_ALREADY_CLAIMED: 'Another partner picked up this delivery first.',
+  ALREADY_DELIVERY_PARTNER:
+    'That person still has a delivery posting. End it before making them canteen staff.',
   OFF_SHIFT: 'Go online to take deliveries.',
   DUPLICATE_REQUEST: 'That was already submitted.',
   PAYMENT_FAILED: 'Payment did not go through. You have not been charged.',

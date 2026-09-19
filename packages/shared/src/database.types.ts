@@ -910,6 +910,32 @@ export type Database = {
     };
     };
     Functions: {
+    admin_attach_canteen_staff: {
+      Args: {
+        p_profile_id: string | null;
+        p_canteen_id: string | null;
+      };
+      Returns: undefined;
+    };
+    admin_create_canteen: {
+      Args: {
+        p_name: string | null;
+        p_description: string | null;
+        p_phone: string | null;
+        p_image_url: string | null;
+        p_min_order_paise: number | null;
+        p_opens_at: string | null;
+        p_closes_at: string | null;
+      };
+      Returns: string;
+    };
+    admin_detach_canteen_staff: {
+      Args: {
+        p_profile_id: string | null;
+        p_canteen_id: string | null;
+      };
+      Returns: undefined;
+    };
     admin_set_canteen_active: {
       Args: {
         p_canteen_id: string | null;

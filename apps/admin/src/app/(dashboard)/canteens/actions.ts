@@ -77,3 +77,73 @@ export async function setCanteenActive(canteenId: string, active: boolean): Prom
   revalidatePath('/canteens');
   redirect('/canteens');
 }
+
+export async function createCanteen(formData: FormData): Promise<void> {
+  const parsed = parseCanteenForm(formData);
+  if (!parsed.ok) {
+    redirect(`/canteens/new?error=${encodeURIComponent(parsed.error)}`);
+  }
+
+  const supabase = await createServerSupabase();
+  // `is_accepting_orders` is not a parameter: the new canteen is created disabled, so
+  // the pause switch has nothing to pause. It keeps its column default and becomes
+  // meaningful the moment an admin enables the canteen.
+  const { data: id, error } = await supabase.rpc('admin_create_canteen', {
+    p_name: parsed.values.name,
+    p_description: parsed.values.description,
+    p_phone: parsed.values.phone,
+    p_image_url: parsed.values.imageUrl,
+    p_min_order_paise: parsed.values.minOrderPaise,
+    p_opens_at: parsed.values.opensAt,
+    p_closes_at: parsed.values.closesAt,
+  });
+
+  if (error || !id) {
+    redirect(`/canteens/new?error=${encodeURIComponent(messageFor(error))}`);
+  }
+
+  revalidatePath('/canteens');
+  redirect(`/canteens?created=${encodeURIComponent(parsed.values.name)}`);
+}
+
+/**
+ * Staff attachment.
+ *
+ * Both write two things at once — the `canteen_staff` row and `profiles.role` — which is
+ * why they are RPCs and why `canteen_staff` no longer carries a client write grant. A
+ * direct insert would give someone the canteen's data behind a student's menu.
+ */
+export async function attachStaff(canteenId: string, formData: FormData): Promise<void> {
+  const profileId = formData.get('profile_id');
+  if (typeof profileId !== 'string' || !profileId) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent('Pick someone to attach.')}`);
+  }
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.rpc('admin_attach_canteen_staff', {
+    p_profile_id: profileId,
+    p_canteen_id: canteenId,
+  });
+
+  if (error) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent(messageFor(error))}`);
+  }
+
+  revalidatePath(`/canteens/${canteenId}`);
+  redirect(`/canteens/${canteenId}`);
+}
+
+export async function detachStaff(canteenId: string, profileId: string): Promise<void> {
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.rpc('admin_detach_canteen_staff', {
+    p_profile_id: profileId,
+    p_canteen_id: canteenId,
+  });
+
+  if (error) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent(messageFor(error))}`);
+  }
+
+  revalidatePath(`/canteens/${canteenId}`);
+  redirect(`/canteens/${canteenId}`);
+}
