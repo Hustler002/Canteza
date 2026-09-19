@@ -910,18 +910,47 @@ export type Database = {
     };
     };
     Functions: {
+    admin_set_canteen_active: {
+      Args: {
+        p_canteen_id: string | null;
+        p_active: boolean | null;
+      };
+      Returns: undefined;
+    };
+    admin_set_partner_active: {
+      Args: {
+        p_profile_id: string | null;
+        p_canteen_id: string | null;
+        p_active: boolean | null;
+      };
+      Returns: undefined;
+    };
     admin_set_partner_canteen: {
       Args: {
-        p_profile_id: string;
-        p_canteen_id: string;
-        p_approved?: boolean;
+        p_profile_id: string | null;
+        p_canteen_id: string | null;
+        p_approved?: boolean | null;
       };
       Returns: undefined;
     };
     admin_set_role: {
       Args: {
-        p_profile_id: string;
-        p_role: string;
+        p_profile_id: string | null;
+        p_role: string | null;
+      };
+      Returns: undefined;
+    };
+    admin_update_canteen: {
+      Args: {
+        p_canteen_id: string | null;
+        p_name: string | null;
+        p_description: string | null;
+        p_phone: string | null;
+        p_image_url: string | null;
+        p_min_order_paise: number | null;
+        p_opens_at: string | null;
+        p_closes_at: string | null;
+        p_is_accepting_orders: boolean | null;
       };
       Returns: undefined;
     };
@@ -935,14 +964,14 @@ export type Database = {
     };
     canteen_set_partner_active: {
       Args: {
-        p_profile_id: string;
-        p_active: boolean;
+        p_profile_id: string | null;
+        p_active: boolean | null;
       };
       Returns: undefined;
     };
     claim_delivery: {
       Args: {
-        p_order_id: string;
+        p_order_id: string | null;
       };
       Returns: string;
     };
@@ -956,9 +985,9 @@ export type Database = {
     };
     is_within_hours: {
       Args: {
-        p_opens: string;
-        p_closes: string;
-        p_at: string;
+        p_opens: string | null;
+        p_closes: string | null;
+        p_at: string | null;
       };
       Returns: boolean;
     };
@@ -972,44 +1001,44 @@ export type Database = {
     };
     notify_order: {
       Args: {
-        p_order_id: string;
-        p_status: string;
-        p_audiences: string[];
+        p_order_id: string | null;
+        p_status: string | null;
+        p_audiences: string[] | null;
       };
       Returns: undefined;
     };
     place_order: {
       Args: {
-        p_canteen_id: string;
-        p_items: Json;
-        p_hostel_id: string;
-        p_block: string;
-        p_room: string;
-        p_idempotency_key: string;
-        p_note?: string;
-        p_coupon_code?: string;
-        p_payment_method?: string;
+        p_canteen_id: string | null;
+        p_items: Json | null;
+        p_hostel_id: string | null;
+        p_block: string | null;
+        p_room: string | null;
+        p_idempotency_key: string | null;
+        p_note?: string | null;
+        p_coupon_code?: string | null;
+        p_payment_method?: string | null;
       };
       Returns: string;
     };
     release_delivery: {
       Args: {
-        p_order_id: string;
+        p_order_id: string | null;
       };
       Returns: string;
     };
     setting_int: {
       Args: {
-        p_key: string;
-        p_default: number;
+        p_key: string | null;
+        p_default: number | null;
       };
       Returns: number;
     };
     transition_order: {
       Args: {
-        p_order_id: string;
-        p_to: string;
-        p_reason?: string;
+        p_order_id: string | null;
+        p_to: string | null;
+        p_reason?: string | null;
       };
       Returns: string;
     };

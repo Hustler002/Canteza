@@ -106,6 +106,16 @@ describe('what authenticated may write, column by column', () => {
     expect(await writableColumns('authenticated', 'delivery_partners')).toEqual(['is_online']);
   });
 
+  it('on canteens: a canteen owns its hours and its pause switch, nothing more', async () => {
+    // Admins are `authenticated` too, so this list binds them as well — their wider
+    // reach is admin_update_canteen / admin_set_canteen_active, not a grant.
+    expect(await writableColumns('authenticated', 'canteens')).toEqual([
+      'closes_at',
+      'is_accepting_orders',
+      'opens_at',
+    ]);
+  });
+
   it('on notifications: marking one read, not rewriting it', async () => {
     expect(await writableColumns('authenticated', 'notifications')).toEqual(['read_at']);
   });
@@ -181,9 +191,11 @@ describe('functions', () => {
         where n.nspname = 'public'
           and p.proname in ('place_order', 'transition_order', 'claim_delivery',
                             'release_delivery', 'admin_set_role',
-                            'admin_set_partner_canteen', 'canteen_set_partner_active')`,
+                            'admin_set_partner_canteen', 'admin_set_partner_active',
+                            'admin_update_canteen', 'admin_set_canteen_active',
+                            'canteen_set_partner_active')`,
     );
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(10);
     expect(rows.every((r) => r.ok)).toBe(true);
   });
 

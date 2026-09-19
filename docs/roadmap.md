@@ -3,17 +3,17 @@
 Vertical slices. Each phase ends with something demonstrable end-to-end, not a set of
 half-built screens.
 
-| Phase | Outcome                                                                          | Status  |
-| ----- | -------------------------------------------------------------------------------- | ------- |
-| 0     | Repository assessment, architecture, ADRs                                        | ✅ done |
-| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done |
-| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done |
-| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done |
-| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
-| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done |
-| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ⬜ next |
-| 7     | Secondary: ratings, favourites, reorder, coupons, complaints, analytics          | ⬜      |
-| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜      |
+| Phase | Outcome                                                                          | Status         |
+| ----- | -------------------------------------------------------------------------------- | -------------- |
+| 0     | Repository assessment, architecture, ADRs                                        | ✅ done        |
+| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done        |
+| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done        |
+| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done        |
+| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done        |
+| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done        |
+| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | 🔷 in progress |
+| 7     | Secondary: ratings, favourites, reorder, coupons, complaints, analytics          | ⬜             |
+| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜             |
 
 ---
 
@@ -80,9 +80,47 @@ change live. This is the phase that makes the product real.
 The partner's own canteen's ready queue, atomic claim, pickup, deliver, daily history and
 earnings. Canteen-scoped throughout (ADR 008). Completes the end-to-end flow.
 
-## Phase 6 — admin
+## Phase 6 — admin 🔷
 
 Overview metrics, order search/filter, user and canteen management, hostel management.
+
+**Done:** the signed-in shell (`(dashboard)` route group holds the admin gate and nav
+once), order search and filtering across the whole platform, and an order detail page
+with the `order_status_history` trail — who moved it, from what, when, and why.
+
+The pattern the rest of the phase follows: server components read, server actions write,
+filters live in `searchParams` rather than state so a filtered view is a shareable link.
+No client query cache in the admin app; ADR 004 is the mobile pattern.
+
+Also landed here, out of order because the dashboard needs it: `admin_set_partner_active`.
+`admin_set_partner_canteen` could hire and transfer delivery staff but nothing could
+retire them — `canteen_set_partner_active` is scoped to the caller's own canteen, and
+the only UPDATE grant on `delivery_partners` is `is_online`. The SQL and its tests are
+in; the UI control lands with the delivery-staff page.
+
+Fixed while verifying the slice: `proxy.ts` was at the admin package root, but this app
+uses a `src/` directory, so Next had been ignoring it since Phase 3 — the login redirect
+never fired and the session was never refreshed. Moved to `src/proxy.ts`; `next build`
+now prints `ƒ Proxy (Middleware)`, which is the check.
+
+**Not yet verified:** no Orders page has rendered a real row. Routing, the redirect, the
+stylesheet across breakpoints and the pure functions are checked; the PostgREST embed,
+the search and the date bounds need a live database.
+
+Canteens landed next: the list with live open/closed state read from `canteens_public`
+(so the midnight-crossing hours logic is never ported into TypeScript), an edit form, and
+a disable switch. Disabling hides a canteen from students and keeps every order, menu item
+and staff row — nothing operational is hard-deleted.
+
+That slice also closed a grant hole. `canteens_staff_update` claimed staff adjust "hours
+and pause switch", but the grant behind it was table-wide, so a canteen account could
+rename itself, change its own minimum order, or set `is_active = false`. Column grants are
+per role and admins are `authenticated` too, so the fix narrows the grant to
+`opens_at, closes_at, is_accepting_orders` for everyone and moves the admin's wider reach
+into `admin_update_canteen` / `admin_set_canteen_active` — the same `security definer`
+pattern as `admin_set_role`.
+
+**Left:** create a canteen, delivery staff, students, hostels, analytics.
 
 ## Phase 7 — secondary features
 

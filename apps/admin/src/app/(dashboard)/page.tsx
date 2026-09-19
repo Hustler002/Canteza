@@ -1,41 +1,16 @@
-import { getIdentity } from '@canteza/api';
-import { BRAND, formatPaise } from '@canteza/shared';
+import Link from 'next/link';
+import { formatPaise } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
-import { SignOutButton } from './sign-out-button';
 
 /**
  * Admin overview.
  *
  * Every number here is a real, RLS-scoped query. An admin sees the whole platform
- * because their profile says so — not because this page is privileged. A canteen
- * account that reached this URL would see its own canteen's rows and nothing else,
- * which is why the role check below is a courtesy message rather than a gate.
+ * because their profile says so — not because this page is privileged. The layout
+ * has already established that the viewer is an admin.
  */
 export default async function DashboardPage() {
   const supabase = await createServerSupabase();
-  const identity = await getIdentity(supabase);
-
-  if (!identity) {
-    return (
-      <main className="shell">
-        <p className="muted">Not signed in.</p>
-      </main>
-    );
-  }
-
-  if (identity.role !== 'admin') {
-    return (
-      <main className="shell">
-        <div className="card">
-          <h2>This dashboard is for admins</h2>
-          <p className="muted">
-            You are signed in as a {identity.role}. Use the {BRAND.name} mobile app for that role.
-          </p>
-          <SignOutButton />
-        </div>
-      </main>
-    );
-  }
 
   const [orders, students, canteens, partners, revenue] = await Promise.all([
     supabase.from('orders').select('id', { count: 'exact', head: true }),
@@ -64,18 +39,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <main className="shell">
-      <header
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}
-      >
-        <div>
-          <span className="badge">ADMIN</span>
-          <h1 style={{ marginTop: 8 }}>{BRAND.name}</h1>
-          <p className="muted">{identity.profile.full_name || identity.email}</p>
-        </div>
-        <SignOutButton />
-      </header>
-
+    <>
       <section className="grid">
         {stats.map((stat) => (
           <div className="card" key={stat.label}>
@@ -88,11 +52,11 @@ export default async function DashboardPage() {
       <section className="card">
         <h2>Next</h2>
         <p className="muted">
-          Phase 6 fills this in: order search and filtering, student and canteen management,
-          delivery staff onboarding, hostels, complaints and analytics. The data and the permissions
-          for all of it already exist — these counts prove the connection works.
+          <Link href="/orders">Orders</Link> is live: search, filter and the full status trail.
+          Still to come in Phase 6 — canteens, delivery staff, students and hostels, and the
+          analytics breakdown. The data and the permissions for all of it already exist.
         </p>
       </section>
-    </main>
+    </>
   );
 }

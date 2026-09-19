@@ -227,7 +227,12 @@ const functions = fns
           .map((t, i) => {
             const argName = names[i] ?? `arg${i}`;
             const optional = i >= required ? '?' : '';
-            return `${indent(4)}${argName}${optional}: ${tsType(f.argfmt[i], t)};`;
+            // Every Postgres function parameter is nullable -- `pg_proc` carries no
+            // NOT NULL information for arguments, and a function is free to be handed
+            // null for any of them. Emitting a bare `string` claimed otherwise, and
+            // refused a legitimate call: admin_update_canteen(p_phone => null) clears
+            // the column. The function itself is what rejects a null it cannot use.
+            return `${indent(4)}${argName}${optional}: ${tsType(f.argfmt[i], t)} | null;`;
           })
           .join('\n')
       : null;

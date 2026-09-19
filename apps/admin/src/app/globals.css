@@ -169,3 +169,159 @@ h3 {
   display: grid;
   gap: 20px;
 }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.nav a {
+  padding: 10px 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.nav a:hover {
+  color: var(--text);
+  border-bottom-color: var(--border);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.toolbar input,
+.toolbar select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+.toolbar input[type='search'] {
+  flex: 1 1 200px;
+}
+.toolbar .button {
+  min-height: 44px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Tables are the one place the 1120px shell is not wide enough on a laptop, so the
+   table scrolls rather than the page. */
+.table-scroll {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 0 12px 8px;
+  white-space: nowrap;
+}
+.table td {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+}
+.table tr:hover td {
+  background: var(--surface-alt);
+}
+.table a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.right {
+  text-align: right;
+}
+
+.pairs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+.pairs dt {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.pairs dd {
+  margin: 0;
+}
+
+.trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.trail li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+/* Terminal outcomes are told apart at a glance; anything still moving keeps the
+   default. The tone is derived from the status in format.ts, never written per page. */
+.badge.ok {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+.badge.bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Form layout. `.row` collapses to one column on a phone; `.stack` is the form itself. */
+.stack {
+  display: grid;
+  gap: 20px;
+}
+.row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.field span.muted {
+  font-size: 13px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+  flex: none;
+}

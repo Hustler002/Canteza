@@ -8,8 +8,9 @@
 
 ## Where the project is right now
 
-**Phase 5 complete.** The full order path now runs student -> canteen -> partner: 193 tests green.
-**Phase 6 (admin dashboard) is next.**
+**Phase 6 in progress.** The admin dashboard searches every order, reads its status trail,
+and manages canteens: 241 tests green.
+**Next** — delivery staff, students, hostels, analytics.
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -21,7 +22,7 @@
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
-⬜ Phase 6  admin dashboard                                             ← NEXT
+🔷 Phase 6  admin: orders search, status trail, canteens + 42 tests  ← IN PROGRESS
 ⬜ Phase 7  ratings, favourites, coupons, complaints, analytics
 ⬜ Phase 8  push, Razorpay, Sentry, deploy
 ```
@@ -45,7 +46,7 @@ supabase/               migrations, seed, RPC functions, database tests
 
 ```
 apps/mobile/            Expo + expo-router. Student / Canteen / Delivery
-apps/admin/             Next.js 16 App Router (proxy.ts, not middleware.ts)
+apps/admin/             Next.js 16 App Router (src/proxy.ts, not middleware.ts)
 packages/api/           Typed data access: client, auth, error mapping, query keys
 scripts/gen-types.mjs   Generates database.types.ts from the migrations, no Docker
 ```
@@ -92,9 +93,11 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `..._student_default_address.sql`   | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
 | `..._delivery_shift_toggle.sql`     | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
 | `..._harden_default_privileges.sql` | **Security.** Revokes Supabase's blanket grants, restates the real ones |
+| `..._admin_set_partner_active.sql`  | Admin ends or restores a delivery posting; canteen id is explicit       |
+| `..._canteen_column_grants.sql`     | **Security.** Staff write hours + pause only; admin writes via RPC      |
 | `seed.sql`                          | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
 | `seed-users.mjs`                    | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                             | 115 tests on in-process Postgres — see `test/README.md`                 |
+| `test/`                             | 130 tests on in-process Postgres — see `test/README.md`                 |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -105,6 +108,10 @@ claim_delivery(order_id)   -> uuid     -- atomic; raises DELIVERY_ALREADY_CLAIME
 release_delivery(order_id) -> text     -- back to the pool
 admin_set_role(profile_id, role)
 admin_set_partner_canteen(profile_id, canteen_id, approved)   -- onboard or transfer
+admin_set_partner_active(profile_id, canteen_id, active)      -- admin retires or restores
+admin_update_canteen(canteen_id, name, description, phone, image_url,
+                     min_order_paise, opens_at, closes_at, accepting)
+admin_set_canteen_active(canteen_id, active)                  -- disable, never delete
 canteen_set_partner_active(profile_id, active)                -- canteen retires own staff
 ```
 
@@ -207,6 +214,12 @@ Departures from the original brief, all argued in the ADRs:
 - **Nothing has run against a real Supabase yet.** Auth, Realtime and PostgREST are
   exercised only through generated types and the SQL tests. See "Verifying against a
   real database" below — it needs no Docker.
+- **The admin Orders pages have never rendered a real row.** The routing, the redirect,
+  the stylesheet at 375/768/desktop and every pure function behind them are verified;
+  what is not is a PostgREST response — the `profiles!orders_student_id_fkey` embed, the
+  `or=(...)` search actually matching, and the date bounds landing on the right campus
+  day. Those need a database. First person with one: sign in as admin@campus.edu, search
+  `1042`, filter by status and by date, and open an order.
 - PGlite is single-connection, so the race tests verify the **guard** sequentially (A claims,
   B is refused) rather than firing two transactions in parallel. The atomicity is Postgres's
   own, but when Docker is available, re-run the claim scenario against `supabase start` with
@@ -254,20 +267,74 @@ and refuses a hosted URL unless `ALLOW_REMOTE_SEED=1` is set. It drives `place_o
 `transition_order` and `claim_delivery` over HTTP, so a clean run proves PostgREST, Auth
 and the RPC surface end to end. Realtime still needs a device or browser watching.
 
-## Next session: start here
+## Phase 6 screens (admin)
 
-Phase 6 — the admin dashboard (`apps/admin`, Next.js 16). The shell, login and
-overview counts already work; everything below is new pages against existing data
-and permissions:
+```
+app/(dashboard)/layout.tsx        admin gate + nav, written once for every page
+app/(dashboard)/page.tsx          overview counts (was app/page.tsx)
+app/(dashboard)/orders/page.tsx   search + status/canteen/date filters, 100 newest
+app/(dashboard)/orders/[id]/      one order: people, address, items, money, trail
+app/(dashboard)/canteens/         list with live open/closed, disable/enable
+app/(dashboard)/canteens/[id]/    edit: name, hours, min order, pause switch
+app/(dashboard)/canteens/actions  the first server actions in this repo
+src/lib/order-filters.ts          URL -> query, pure and tested
+src/lib/canteen-form.ts           FormData -> RPC args, pure and tested
+src/lib/format.ts                 campus-time dates, status text, badge tone
+```
 
-1. **Orders**: search and filter across every order, with the status history trail.
-   Admin can already read all of them (`(select public.is_admin())` in `orders_read`).
-2. **Canteens**: create, edit hours, disable. Admin has full grants already.
-3. **Delivery staff**: onboard and transfer with `admin_set_partner_canteen`. Note a
-   new posting starts **off shift** — the partner goes online themselves.
+**How the admin pages are built, and why** — settled when Phase 6 started, so later
+pages match rather than inventing a second way:
+
+- **Server components read; server actions write.** No `QueryClientProvider` in
+  `apps/admin`, no client fetching, no admin module in `packages/api`. ADR 004's
+  TanStack Query is the _mobile_ pattern; a dashboard that re-renders on navigation
+  does not need a second copy of the data in a client cache.
+- **Filters live in the URL, never in state.** A filtered view is then a link an admin
+  can paste to someone, and the page stays a server component. The filter form is a
+  plain `method="get"`, so it works with no JavaScript and needs no handler.
+- **A search term is interpolated into a PostgREST `or=(...)` string**, which is the one
+  place in this app where user input reaches a query expression rather than a parameter.
+  `parseOrderFilters` reduces it to `[a-z0-9#-]` — a comma would start a new condition
+  and `*` is the ilike wildcard. That is what `apps/admin/test/order-filters.test.ts`
+  exists to hold down.
+- **Dates are campus time, explicitly.** Vercel and Supabase both run UTC, so a bare
+  `2026-09-19` bound would cut the day at 05:30 IST. `CAMPUS_UTC_OFFSET` in
+  `packages/shared/config.ts` is the only place that offset is written.
+- **A badge's tone comes from `statusTone()`**, never from a page. Delivered reads green,
+  cancelled and rejected read red, anything still moving keeps the default — otherwise a
+  scan list renders every outcome in the same orange.
+- **A write goes through an RPC, and its outcome comes back in the URL.** Server actions
+  here never `update` a table directly and never return state to a client component:
+  they call a `security definer` function and `redirect` with `?error=` or `?saved=`.
+  That keeps every admin page a server component and makes a failed save a link.
+- **A mutating control is a `<form>`, never a `<Link>`.** The disable switch POSTs. A GET
+  that changes state gets fired by any prefetcher that touches the page.
+- **`proxy.ts` must live in `src/`.** This app has a `src/` directory, so Next looks for
+  `src/proxy.ts` and silently ignores one at the package root — no warning, no error, the
+  file simply never runs. It sat unregistered from Phase 3 until Phase 6 caught it: the
+  login redirect never fired and, worse, the session was never refreshed. The build
+  output printing `ƒ Proxy (Middleware)` is the check that it is wired up.
+
+## Next session: continue Phase 6
+
+`apps/admin`, Next.js 16. Orders is done; the rest is new pages in the same shape,
+against data and permissions that already exist:
+
+1. ~~**Orders**: search, filter, status history trail.~~ ✅ done
+2. ~~**Canteens**: edit hours, disable.~~ ✅ done — **create** is still open, and a new
+   canteen lands with no staff and no menu, so it cannot take an order until both exist.
+3. **Delivery staff**: onboard and transfer with `admin_set_partner_canteen`, retire or
+   restore with `admin_set_partner_active` (the SQL and its tests landed with the orders
+   slice; the UI control did not). Note a new posting starts **off shift** — the partner
+   goes online themselves.
 4. **Students, hostels**: manage. `admin_set_role` is the only path to a role change.
 5. **Analytics**: platform revenue is `sum(platform_fee_paise)` on delivered orders —
    our cut only. Canteen revenue is subtotal + (delivery fee − platform fee).
+
+Two things the orders page deliberately does not do: **no pagination** (100 newest, and
+it says so when it truncates — add a cursor when a real dataset makes that bite), and
+**no "you are here" in the nav**, because highlighting it would make the nav a client
+component for one line of styling.
 
 **Still unverified anywhere:** nothing has run against a real Supabase. Realtime,
 Auth and PostgREST are exercised only by types and the SQL tests — all of it needs

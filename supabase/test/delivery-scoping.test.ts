@@ -272,3 +272,90 @@ describe('canteen self-delivery', () => {
     await expectError(() => move(id, 'delivered'), 'INVALID_TRANSITION');
   });
 });
+
+describe('an admin retires a delivery partner', () => {
+  /** The posting rows this person holds, oldest state first. */
+  const postingsOf = async (profileId: string) => {
+    await db.asOwner();
+    const { rows } = await db.query<{
+      canteen_id: string;
+      is_active: boolean;
+      is_online: boolean;
+    }>(
+      `select canteen_id, is_active, is_online from public.delivery_partners
+        where profile_id = $1 order by is_active`,
+      [profileId],
+    );
+    return rows;
+  };
+
+  it('ends a posting the admin does not employ, and clears the shift with it', async () => {
+    await goOnline(campus.juicePartner);
+
+    await db.asUser(campus.admin);
+    await db.query(`select public.admin_set_partner_active($1::uuid, $2::uuid, false)`, [
+      campus.juicePartner,
+      campus.juiceCorner,
+    ]);
+
+    // Shift cleared too: otherwise my_delivery_canteen_id() still matches and a
+    // retired partner keeps claiming.
+    expect(await postingsOf(campus.juicePartner)).toEqual([
+      { canteen_id: campus.juiceCorner, is_active: false, is_online: false },
+    ]);
+  });
+
+  it('refuses a canteen and a student alike — this is the admin path', async () => {
+    for (const impostor of [campus.otherStaff, campus.student]) {
+      await db.asUser(impostor);
+      await expectError(
+        () =>
+          db.query(`select public.admin_set_partner_active($1::uuid, $2::uuid, true)`, [
+            campus.juicePartner,
+            campus.juiceCorner,
+          ]),
+        'FORBIDDEN',
+      );
+    }
+    // Still retired by the test above: a refused call changed nothing.
+    expect((await postingsOf(campus.juicePartner))[0]!.is_active).toBe(false);
+  });
+
+  it('restores the posting, but leaves going back on shift to the partner', async () => {
+    await db.asUser(campus.admin);
+    await db.query(`select public.admin_set_partner_active($1::uuid, $2::uuid, true)`, [
+      campus.juicePartner,
+      campus.juiceCorner,
+    ]);
+
+    expect(await postingsOf(campus.juicePartner)).toEqual([
+      { canteen_id: campus.juiceCorner, is_active: true, is_online: false },
+    ]);
+  });
+
+  it('rolls the retire back when the canteen named has no posting', async () => {
+    // Imran transferred to Juice Corner above and has no Hostel Canteen row. The
+    // function retires his live posting before discovering that, so the failure has
+    // to take the retire with it -- otherwise a mistyped canteen id silently strips
+    // someone of the job they had.
+    await db.asUser(campus.admin);
+    await expectError(
+      () =>
+        db.query(`select public.admin_set_partner_active($1::uuid, $2::uuid, true)`, [
+          campus.otherPartner,
+          campus.hostelCanteen,
+        ]),
+      'NOT_FOUND',
+    );
+
+    // `is_active` is what matters: both postings are exactly as the transfer left
+    // them. The retired row reads `is_online: true` only because this file's
+    // goOnline() helper updates by profile alone -- the app's setOnline() filters on
+    // `is_active`, and an inactive posting is ignored by my_delivery_canteen_id()
+    // either way.
+    expect(await postingsOf(campus.otherPartner)).toEqual([
+      { canteen_id: campus.mainCanteen, is_active: false, is_online: true },
+      { canteen_id: campus.juiceCorner, is_active: true, is_online: true },
+    ]);
+  });
+});
