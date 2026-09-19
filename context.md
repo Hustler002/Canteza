@@ -1,4 +1,4 @@
-# CampusEats — full project context
+# Canteza — full project context
 
 Background for anyone (human or model) picking this up cold. For _where the work currently
 stands_, read [`CLAUDE.md`](./CLAUDE.md). For _why_ a technical choice was made, read the
@@ -8,7 +8,7 @@ ADR in [`docs/decisions/`](./docs/decisions/).
 
 ## 1. What we are building
 
-**CampusEats — Your Campus. Your Food. Delivered.**
+**Canteza — From Canteen to Your Room.**
 
 A campus-only food delivery platform. Students in college hostels order from campus
 canteens; a delivery partner carries the food to their hostel room. Everything happens

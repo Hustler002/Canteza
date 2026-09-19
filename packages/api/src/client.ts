@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@campuseats/shared';
+import type { Database } from '@canteza/shared';
 
 /**
  * One Supabase client factory for both apps.

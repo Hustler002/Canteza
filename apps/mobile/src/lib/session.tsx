@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getIdentity, queryKeys, type Identity } from '@campuseats/api';
-import { toAppError, type AppError } from '@campuseats/shared';
+import { getIdentity, queryKeys, type Identity } from '@canteza/api';
+import { toAppError, type AppError } from '@canteza/shared';
 import { supabase } from './supabase';
 import { queryClient } from './query';
 

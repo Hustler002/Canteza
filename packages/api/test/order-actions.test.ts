@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextStatusesFor, ORDER_STATUSES, type OrderStatus } from '@campuseats/shared';
+import { nextStatusesFor, ORDER_STATUSES, type OrderStatus } from '@canteza/shared';
 
 /**
  * The canteen board renders one button per entry in nextStatusesFor(status, 'canteen')

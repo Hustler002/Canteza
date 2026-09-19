@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "CampusEats",
-    "slug": "campuseats",
+    "name": "Canteza",
+    "slug": "canteza",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +22,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": ["expo-router", "expo-secure-store"],
-    "scheme": "campuseats",
+    "scheme": "canteza",
     "newArchEnabled": true,
     "extra": {
       "supabaseUrl": "$SUPABASE_URL",

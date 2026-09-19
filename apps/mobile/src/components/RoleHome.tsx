@@ -1,6 +1,6 @@
 import { View } from 'react-native';
-import { isAwaitingOnboarding } from '@campuseats/api';
-import { BRAND, formatPaise, PLATFORM_DEFAULTS } from '@campuseats/shared';
+import { isAwaitingOnboarding } from '@canteza/api';
+import { BRAND, formatPaise, PLATFORM_DEFAULTS } from '@canteza/shared';
 import { useIdentity, useSession } from '../lib/session';
 import { Badge, Body, Button, Card, EmptyState, Heading, Screen } from './ui';
 import { useTheme } from '../theme';

@@ -1,4 +1,4 @@
-# CampusEats — Implementation roadmap
+# Canteza — Implementation roadmap
 
 Vertical slices. Each phase ends with something demonstrable end-to-end, not a set of
 half-built screens.
@@ -10,8 +10,8 @@ half-built screens.
 | 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done |
 | 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done |
 | 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
-| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ⬜ next |
-| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ⬜      |
+| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done |
+| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ⬜ next |
 | 7     | Secondary: ratings, favourites, reorder, coupons, complaints, analytics          | ⬜      |
 | 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜      |
 

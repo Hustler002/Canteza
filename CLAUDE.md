@@ -1,4 +1,4 @@
-# CampusEats — project state
+# Canteza — project state
 
 **Read this first in a new session.** Product and architectural background is in
 [`context.md`](./context.md); the reasoning behind each choice is in
@@ -8,8 +8,11 @@
 
 ## Where the project is right now
 
-**Phase 4 complete.** The core ordering slice is built end to end: 164 tests green.
-**Phase 5 (delivery partner) is next.**
+**Phase 5 complete.** The full order path now runs student -> canteen -> partner: 181 tests green.
+**Phase 6 (admin dashboard) is next.**
+
+> **Commits are yours.** Never run `git commit` here — finish the work, run
+> `npm run verify`, and hand it over.
 
 ```
 ✅ Phase 0  assessment, architecture, ADRs
@@ -17,8 +20,8 @@
 ✅ Phase 2  schema, RLS, RPC functions, seed data + 95 tests (ADR 008 rework + audit)
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
-⬜ Phase 5  delivery partner                                            ← NEXT
-⬜ Phase 6  admin dashboard
+✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
+⬜ Phase 6  admin dashboard                                             ← NEXT
 ⬜ Phase 7  ratings, favourites, coupons, complaints, analytics
 ⬜ Phase 8  push, Razorpay, Sentry, deploy
 ```
@@ -53,7 +56,7 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 | Module              | Holds                                                                     |
 | ------------------- | ------------------------------------------------------------------------- |
-| `brand.ts`          | Product name, tagline, locale. Rename the product here and nowhere else.  |
+| `brand.ts`          | Name, tagline, support email, locale. The **only** place the name lives.  |
 | `money.ts`          | Integer paise. `formatPaise`, `rupeesToPaise`. Throws on non-integers.    |
 | `roles.ts`          | `student` \| `canteen` \| `delivery` \| `admin`                           |
 | `order-status.ts`   | **The order state machine.** Transition table, actor permissions, labels. |
@@ -76,6 +79,7 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `catalog.ts`  | Canteens, menus, hostels, the student's default address                      |
 | `orders.ts`   | `placeOrder`, `transitionOrder`, order reads with embedded items             |
 | `realtime.ts` | `subscribeToOrders` + `orderFilters`. Hands back no payload, by design       |
+| `delivery.ts` | Queue, claim/release, shift toggle, `summariseDeliveries` (counts, not pay)  |
 
 ### `supabase/` — the database
 
@@ -86,6 +90,7 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `..._rls.sql`                     | RLS helpers, policies, column-level grants, realtime                    |
 | `..._functions.sql`               | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
 | `..._student_default_address.sql` | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
+| `..._delivery_shift_toggle.sql`   | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
 | `seed.sql`                        | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
 | `seed-users.mjs`                  | Accounts via the Auth API, then demo orders through the real RPCs       |
 | `test/`                           | 95 tests on in-process Postgres — see `test/README.md`                  |
@@ -144,15 +149,18 @@ npm run db:push        # deploy migrations to the linked project
     (mobile) or the CSS variables in `globals.css` (admin).
 15. **Role routing is ergonomics, not security.** RLS is the boundary. A patched
     client gets a different menu and no extra data.
-16. **The cart stores item ids and quantities only.** No prices, no names, no total.
+16. **Never write the product name in a component.** Import `BRAND` from
+    `@canteza/shared`. The product is Canteza; `CampusEats` was the placeholder in the
+    original brief and now appears nowhere in the repo.
+17. **The cart stores item ids and quantities only.** No prices, no names, no total.
     `place_order` re-reads every price server-side, so a price here would be a lie
     waiting to happen.
-17. **Action buttons come from `nextStatusesFor(status, actor)`**, never a hand-written
+18. **Action buttons come from `nextStatusesFor(status, actor)`**, never a hand-written
     list, so a screen cannot offer a move the database would refuse.
-18. **Route groups do not appear in the URL.** `app/(student)/home.tsx` is `/home`.
+19. **Route groups do not appear in the URL.** `app/(student)/home.tsx` is `/home`.
     Give each role group a distinct filename — three `index.tsx` files would all
     resolve to `/`.
-19. **Vertical slices.** A working end-to-end path beats twenty half-built screens.
+20. **Vertical slices.** A working end-to-end path beats twenty half-built screens.
 
 ## Decisions already made (do not re-litigate without a reason)
 
@@ -208,23 +216,39 @@ app/(student)/order/[id].tsx    live tracker, cancel while pending
 app/(canteen)/orders.tsx        four-tab board, buttons from the state machine
 ```
 
+## Phase 5 screens
+
+```
+app/(delivery)/deliveries.tsx     shift switch, carrying-now list, canteen's queue
+app/(delivery)/delivery/[id].tsx  destination large, cash to collect, state-machine buttons
+app/(delivery)/history.tsx        completed deliveries + counts (never a rupee figure)
+```
+
+**The shift rule worth remembering:** `is_online` hides the queue and refuses new
+claims, but never touches an order already in hand. `orders` matches those by
+`delivery_partner_id = auth.uid()` and `transition_order` resolves the actor the same
+way, so going off shift cannot strand food someone is carrying.
+
 ## Next session: start here
 
-Phase 5 — the delivery partner, canteen-scoped throughout (ADR 008):
+Phase 6 — the admin dashboard (`apps/admin`, Next.js 16). The shell, login and
+overview counts already work; everything below is new pages against existing data
+and permissions:
 
-1. **Ready queue**: the partner's own canteen's unclaimed `ready` orders. The orders
-   RLS policy already scopes this — query `status=ready, delivery_partner_id is null`
-   and RLS does the rest. Reuse `useOrdersRealtime(orderFilters.forCanteen(...))`.
-2. **Claim**: `rpc('claim_delivery', …)`. Losing the race raises
-   `DELIVERY_ALREADY_CLAIMED` — show it and refresh, never retry blindly.
-3. **Active delivery**: pickup and deliver via `transitionOrder`, with the full
-   room-level address. Buttons from `nextStatusesFor(status, 'delivery')`.
-4. **Earnings**: the partner is paid by their canteen, so this is a count of completed
-   deliveries, not a payout figure. `orders.platform_fee_paise` is _our_ cut, not theirs.
+1. **Orders**: search and filter across every order, with the status history trail.
+   Admin can already read all of them (`(select public.is_admin())` in `orders_read`).
+2. **Canteens**: create, edit hours, disable. Admin has full grants already.
+3. **Delivery staff**: onboard and transfer with `admin_set_partner_canteen`. Note a
+   new posting starts **off shift** — the partner goes online themselves.
+4. **Students, hostels**: manage. `admin_set_role` is the only path to a role change.
+5. **Analytics**: platform revenue is `sum(platform_fee_paise)` on delivered orders —
+   our cut only. Canteen revenue is subtotal + (delivery fee − platform fee).
 
 **Still unverified anywhere:** nothing has run against a real Supabase. Realtime,
-Auth and PostgREST are exercised only by types and the SQL tests. The first person
-with Docker should run `npm run db:reset && npm run db:seed:users`, then sign in as
-riya@campus.edu / campus1234 and place an order.
+Auth and PostgREST are exercised only by types and the SQL tests — all of it needs
+Docker. The first person with it should run `npm run db:reset && npm run db:seed:users`,
+then sign in as riya@campus.edu / campus1234, place an order, and watch it appear on
+main.canteen@campus.edu and then vikram@campus.edu.
 
-Keep `npm run verify` green, then update this file and `docs/roadmap.md`.
+Keep `npm run verify` green, then update this file and `docs/roadmap.md`. **Do not
+commit** — leave the work staged for review.

@@ -1,7 +1,7 @@
 // Metro in an npm-workspaces monorepo.
 //
 // Without this, Metro only watches apps/mobile and only resolves its own
-// node_modules, so `@campuseats/shared` (TypeScript source, hoisted to the root)
+// node_modules, so `@canteza/shared` (TypeScript source, hoisted to the root)
 // fails to resolve and edits to it do not trigger a reload.
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('node:path');

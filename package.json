@@ -1,5 +1,5 @@
 {
-  "name": "campuseats",
+  "name": "canteza",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -25,8 +25,8 @@
     "db:push": "supabase db push",
     "db:types": "node scripts/gen-types.mjs",
     "db:lint": "supabase db lint --level warning",
-    "dev:mobile": "npm run start --workspace @campuseats/mobile",
-    "dev:admin": "npm run dev --workspace @campuseats/admin"
+    "dev:mobile": "npm run start --workspace @canteza/mobile",
+    "dev:admin": "npm run dev --workspace @canteza/admin"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

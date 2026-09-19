@@ -1,24 +1,32 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  claimDelivery,
   getActiveOrder,
   getCanteen,
   getOrder,
+  getShiftState,
   invalidationRoots,
+  listActiveDeliveries,
   listCanteenOrders,
   listCanteens,
+  listCompletedDeliveries,
+  listDeliveryQueue,
   listHostels,
   listMenu,
   orderFilters,
   placeOrder,
   queryKeys,
+  releaseDelivery,
   saveDefaultAddress,
+  setOnline,
   subscribeToOrders,
+  summariseDeliveries,
   transitionOrder,
   type DefaultAddress,
   type PlaceOrderInput,
-} from '@campuseats/api';
-import type { OrderStatus } from '@campuseats/shared';
+} from '@canteza/api';
+import type { OrderStatus } from '@canteza/shared';
 import { supabase } from './supabase';
 
 /**
@@ -115,6 +123,77 @@ export function useSaveDefaultAddress(userId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
     },
   });
+}
+
+/* ------------------------------------------------------------------ delivery */
+
+export function useDeliveryQueue(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.deliveryQueue(),
+    queryFn: () => listDeliveryQueue(supabase),
+    enabled,
+  });
+}
+
+export function useActiveDeliveries(partnerId: string) {
+  return useQuery({
+    queryKey: queryKeys.myDeliveries(partnerId),
+    queryFn: () => listActiveDeliveries(supabase, partnerId),
+    enabled: Boolean(partnerId),
+  });
+}
+
+export function useDeliveryHistory(partnerId: string) {
+  return useQuery({
+    queryKey: queryKeys.deliveryHistory(partnerId),
+    queryFn: async () => {
+      const completed = await listCompletedDeliveries(supabase, partnerId);
+      return { orders: completed, stats: summariseDeliveries(completed) };
+    },
+    enabled: Boolean(partnerId),
+  });
+}
+
+export function useClaimDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => claimDelivery(supabase, orderId),
+    // Losing the race is a real outcome the partner must see. Invalidate either way
+    // so the queue stops showing an order someone else already took.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.orders });
+    },
+  });
+}
+
+export function useReleaseDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => releaseDelivery(supabase, orderId),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.orders });
+    },
+  });
+}
+
+export function useShift(partnerId: string) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: queryKeys.shift(partnerId),
+    queryFn: () => getShiftState(supabase, partnerId),
+    enabled: Boolean(partnerId),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (online: boolean) => setOnline(supabase, partnerId, online),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shift(partnerId) });
+      // Going on or off shift changes what the queue policy returns.
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.orders });
+    },
+  });
+
+  return { query, setOnline: mutation };
 }
 
 /**

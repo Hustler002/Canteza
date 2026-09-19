@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
-import { isAwaitingOnboarding, type OrderWithItems } from '@campuseats/api';
+import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import {
   formatPaise,
   nextStatusesFor,
   STUDENT_STATUS_LABEL,
   toAppError,
   type OrderStatus,
-} from '@campuseats/shared';
+} from '@canteza/shared';
 import {
   orderFilters,
   useCanteenOrders,

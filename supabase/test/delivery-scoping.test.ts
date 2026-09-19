@@ -53,6 +53,14 @@ async function readyOrder(): Promise<string> {
   return id;
 }
 
+/** What a partner does when they start work. */
+async function goOnline(profileId: string): Promise<void> {
+  await db.asUser(profileId);
+  await db.query(`update public.delivery_partners set is_online = true where profile_id = $1`, [
+    profileId,
+  ]);
+}
+
 const statusOf = async (id: string) => {
   await db.asOwner();
   const { rows } = await db.query<{ status: string; delivery_partner_id: string | null }>(
@@ -139,6 +147,9 @@ describe('claim_delivery is canteen-scoped', () => {
     await db.query(`select public.canteen_set_partner_active($1::uuid, true)`, [
       campus.otherPartner,
     ]);
+    // Retiring someone clears their shift and reinstating does not restore it, so
+    // they come back on shift themselves.
+    await goOnline(campus.otherPartner);
   });
 });
 
@@ -184,6 +195,8 @@ describe('moving a partner between canteens', () => {
       campus.otherPartner,
       campus.juiceCorner,
     ]);
+    // A new posting starts off shift; is_online is the partner's own toggle.
+    await goOnline(campus.otherPartner);
 
     await db.asOwner();
     const postings = await db.query<{ canteen_id: string; is_active: boolean }>(

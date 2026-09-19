@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import type { SessionStorage } from '@campuseats/api';
+import type { SessionStorage } from '@canteza/api';
 
 /**
  * Session storage backed by the device keychain.
@@ -14,7 +14,7 @@ import type { SessionStorage } from '@campuseats/api';
  */
 
 const CHUNK_SIZE = 1800; // headroom under the 2048-byte limit
-const HEADER = 'ce.chunks:';
+const HEADER = 'cz.chunks:';
 
 const partKey = (key: string, index: number) => `${key}.${index}`;
 

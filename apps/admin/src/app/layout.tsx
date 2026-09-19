@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { BRAND } from '@campuseats/shared';
+import { BRAND } from '@canteza/shared';
 import './globals.css';
 
 export const metadata: Metadata = {

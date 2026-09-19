@@ -1,4 +1,4 @@
--- CampusEats seed: campus reference data.
+-- Canteza seed: campus reference data.
 --
 -- User accounts are NOT created here. Inserting into auth.users by hand breaks
 -- whenever GoTrue changes its schema (auth.identities.provider_id is the usual

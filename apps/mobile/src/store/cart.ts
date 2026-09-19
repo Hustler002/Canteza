@@ -89,7 +89,7 @@ export const useCart = create<CartState>()(
       },
     }),
     {
-      name: 'campuseats.cart',
+      name: 'canteza.cart',
       storage: createJSONStorage(() => AsyncStorage),
       // Only the data. Rehydrating functions would overwrite the live ones.
       partialize: (state) => ({ canteenId: state.canteenId, lines: state.lines }),

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'expo-router';
 import { View } from 'react-native';
-import { signIn } from '@campuseats/api';
-import { BRAND, toAppError } from '@campuseats/shared';
+import { signIn } from '@canteza/api';
+import { BRAND, toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
 import { Body, Button, Field, FormError, Heading, Screen } from '../../src/components/ui';
 import { useTheme } from '../../src/theme';

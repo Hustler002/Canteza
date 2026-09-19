@@ -1,5 +1,5 @@
 {
-  "name": "@campuseats/admin",
+  "name": "@canteza/admin",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@campuseats/api": "*",
-    "@campuseats/shared": "*",
+    "@canteza/api": "*",
+    "@canteza/shared": "*",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.58.0",
     "@tanstack/react-query": "^5.90.2",

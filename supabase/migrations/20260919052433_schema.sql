@@ -1,4 +1,4 @@
--- CampusEats schema.
+-- Canteza schema.
 --
 -- Conventions (ADR 003):
 --   * uuid primary keys

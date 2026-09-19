@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
-import { readDefaultAddress } from '@campuseats/api';
-import { computeTotals, formatPaise, PLATFORM_DEFAULTS, toAppError } from '@campuseats/shared';
+import { readDefaultAddress } from '@canteza/api';
+import { computeTotals, formatPaise, PLATFORM_DEFAULTS, toAppError } from '@canteza/shared';
 import {
   useCanteen,
   useHostels,

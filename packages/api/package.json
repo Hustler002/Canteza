@@ -1,5 +1,5 @@
 {
-  "name": "@campuseats/api",
+  "name": "@canteza/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@campuseats/shared": "*",
+    "@canteza/shared": "*",
     "@supabase/supabase-js": "^2.58.0"
   }
 }

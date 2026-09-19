@@ -1,6 +1,6 @@
-# CampusEats
+# Canteza
 
-> Your Campus. Your Food. Delivered.
+> From Canteen to Your Room.
 
 Campus-only food delivery: students order from campus canteens, delivery partners bring it
 to their hostel room.

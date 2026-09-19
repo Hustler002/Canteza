@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { AppError } from '@campuseats/shared';
+import { AppError } from '@canteza/shared';
 
 /**
  * Server state lives here (ADR 004). Realtime invalidates keys; it never patches

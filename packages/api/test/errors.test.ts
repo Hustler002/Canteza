@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AppError } from '@campuseats/shared';
+import { AppError } from '@canteza/shared';
 import { mapSupabaseError, unwrap } from '../src/errors';
 
 describe('mapSupabaseError', () => {

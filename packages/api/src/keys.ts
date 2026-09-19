@@ -27,8 +27,10 @@ export const queryKeys = {
       : (['orders', 'canteen', canteenId] as const),
 
   /** A partner's own canteen's unclaimed ready queue, and their own assignments. */
-  deliveryQueue: (canteenId: string) => ['orders', 'delivery', canteenId, 'queue'] as const,
-  myDeliveries: (partnerId: string) => ['orders', 'delivery', partnerId, 'mine'] as const,
+  deliveryQueue: () => ['orders', 'delivery', 'queue'] as const,
+  myDeliveries: (partnerId: string) => ['orders', 'delivery', partnerId, 'active'] as const,
+  deliveryHistory: (partnerId: string) => ['orders', 'delivery', partnerId, 'history'] as const,
+  shift: (partnerId: string) => ['shift', partnerId] as const,
 
   notifications: (userId: string) => ['notifications', userId] as const,
 } as const;

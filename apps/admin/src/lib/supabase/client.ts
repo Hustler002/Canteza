@@ -1,8 +1,8 @@
 'use client';
 
 import { createBrowserClient } from '@supabase/ssr';
-import type { CampusClient } from '@campuseats/api';
-import type { Database } from '@campuseats/shared';
+import type { CampusClient } from '@canteza/api';
+import type { Database } from '@canteza/shared';
 
 /** createBrowserClient is already a singleton, so this can be called freely. */
 export function createClientSupabase(): CampusClient {

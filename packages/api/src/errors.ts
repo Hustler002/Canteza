@@ -1,4 +1,4 @@
-import { AppError, ERROR_CODES, toAppError, type ErrorCode } from '@campuseats/shared';
+import { AppError, ERROR_CODES, toAppError, type ErrorCode } from '@canteza/shared';
 
 /**
  * Every failure from Supabase becomes an AppError before it reaches a screen, so no

@@ -1,6 +1,6 @@
-# CampusEats — Architecture
+# Canteza — Architecture
 
-> Your Campus. Your Food. Delivered.
+> From Canteen to Your Room.
 
 Status: **living document**. Last updated 2026-09-19 (Phase 1).
 

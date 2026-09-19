@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ROLE_HOME } from '@campuseats/shared';
+import { ROLE_HOME } from '@canteza/shared';
 import { queryClient } from '../src/lib/query';
 import { SessionProvider, useSession } from '../src/lib/session';
 import { Loading } from '../src/components/ui';

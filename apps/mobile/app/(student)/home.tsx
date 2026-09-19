@@ -1,7 +1,7 @@
 import { FlatList, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatPaise, toAppError } from '@campuseats/shared';
-import type { Canteen } from '@campuseats/api';
+import { formatPaise, toAppError } from '@canteza/shared';
+import type { Canteen } from '@canteza/api';
 import {
   useActiveOrder,
   useCanteens,

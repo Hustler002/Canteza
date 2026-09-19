@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import type { CampusClient } from '@campuseats/api';
-import type { Database } from '@campuseats/shared';
+import type { CampusClient } from '@canteza/api';
+import type { Database } from '@canteza/shared';
 
 /**
  * Server-side Supabase client, backed by the request's cookies.

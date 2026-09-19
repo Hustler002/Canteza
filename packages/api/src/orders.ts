@@ -1,4 +1,4 @@
-import type { OrderStatus, Row } from '@campuseats/shared';
+import type { OrderStatus, Row } from '@canteza/shared';
 import type { CampusClient } from './client';
 import { unwrap, unwrapList, unwrapRequired } from './errors';
 

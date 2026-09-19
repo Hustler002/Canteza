@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import type { Insert, Row } from '@campuseats/shared';
+import type { Insert, Row } from '@canteza/shared';
 import type { CampusClient } from '../src/client';
 import type { Identity } from '../src/auth';
 

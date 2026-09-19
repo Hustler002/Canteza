@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from '@campuseats/api';
-import { BRAND, toAppError } from '@campuseats/shared';
+import { signIn } from '@canteza/api';
+import { BRAND, toAppError } from '@canteza/shared';
 import { createClientSupabase } from '@/lib/supabase/client';
 
 export default function LoginPage() {

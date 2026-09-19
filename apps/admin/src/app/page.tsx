@@ -1,5 +1,5 @@
-import { getIdentity } from '@campuseats/api';
-import { BRAND, formatPaise } from '@campuseats/shared';
+import { getIdentity } from '@canteza/api';
+import { BRAND, formatPaise } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { SignOutButton } from './sign-out-button';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { signOut } from '@campuseats/api';
+import { signOut } from '@canteza/api';
 import { createClientSupabase } from '@/lib/supabase/client';
 
 export function SignOutButton() {

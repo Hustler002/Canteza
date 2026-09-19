@@ -1,12 +1,12 @@
 import { View } from 'react-native';
-import type { OrderItem } from '@campuseats/api';
+import type { OrderItem } from '@canteza/api';
 import {
   formatPaise,
   progressIndex,
   STUDENT_PROGRESS_STEPS,
   STUDENT_STATUS_LABEL,
   type OrderStatus,
-} from '@campuseats/shared';
+} from '@canteza/shared';
 import { Badge, Body } from './ui';
 import { useTheme } from '../theme';
 

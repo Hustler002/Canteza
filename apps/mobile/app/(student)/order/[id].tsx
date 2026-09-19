@@ -6,7 +6,7 @@ import {
   isTerminal,
   toAppError,
   type OrderStatus,
-} from '@campuseats/shared';
+} from '@canteza/shared';
 import {
   orderFilters,
   useOrder,

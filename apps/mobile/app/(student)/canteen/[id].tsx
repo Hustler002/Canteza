@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import type { MenuItem } from '@campuseats/api';
-import { formatPaise, toAppError } from '@campuseats/shared';
+import type { MenuItem } from '@canteza/api';
+import { BRAND, formatPaise, toAppError } from '@canteza/shared';
 import { useCanteen, useMenu } from '../../../src/lib/queries';
 import { useCart } from '../../../src/store/cart';
 import {
@@ -105,7 +105,7 @@ function MenuRow({
       setBusy(true);
       Alert.alert(
         'Start a new cart?',
-        'Your cart has items from another canteen. CampusEats can only deliver from one canteen at a time.',
+        `Your cart has items from another canteen. ${BRAND.name} can only deliver from one canteen at a time.`,
         [
           { text: 'Keep my cart', style: 'cancel', onPress: () => setBusy(false) },
           {

@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import {
+  BRAND,
   checkOrderPlacement,
   computeTotals,
   formatPaise,
@@ -8,7 +9,7 @@ import {
   toAppError,
   type CartLine,
   type MenuItemSnapshot,
-} from '@campuseats/shared';
+} from '@canteza/shared';
 import { useCanteen, useMenu } from '../../src/lib/queries';
 import { useCart } from '../../src/store/cart';
 import {
@@ -145,7 +146,7 @@ export default function CartScreen() {
         <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
         <Body muted>
           The canteen keeps every rupee of the food.{' '}
-          {formatPaise(PLATFORM_DEFAULTS.platformFeePaise)} of the delivery fee keeps CampusEats
+          {formatPaise(PLATFORM_DEFAULTS.platformFeePaise)} of the delivery fee keeps {BRAND.name}
           running.
         </Body>
       </Card>

@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
-import { ROLE_HOME } from '@campuseats/shared';
+import { ROLE_HOME } from '@canteza/shared';
 import { useSession } from '../src/lib/session';
 import { Loading } from '../src/components/ui';
 

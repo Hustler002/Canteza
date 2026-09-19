@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { AppState } from 'react-native';
 import Constants from 'expo-constants';
-import { createCampusClient } from '@campuseats/api';
+import { createCampusClient } from '@canteza/api';
 import { secureSessionStorage } from './storage';
 
 /**

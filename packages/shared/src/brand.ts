@@ -3,9 +3,9 @@
  * nothing else in the codebase should hard-code the name.
  */
 export const BRAND = {
-  name: 'CampusEats',
-  tagline: 'Your Campus. Your Food. Delivered.',
-  supportEmail: 'support@campuseats.app',
+  name: 'Canteza',
+  tagline: 'From Canteen to Your Room.',
+  supportEmail: 'support@canteza.in',
   currency: 'INR',
   locale: 'en-IN',
 } as const;

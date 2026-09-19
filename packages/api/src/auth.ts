@@ -1,4 +1,4 @@
-import { AppError, ERROR_CODES, isRole, type Role, type Row } from '@campuseats/shared';
+import { AppError, ERROR_CODES, isRole, type Role, type Row } from '@canteza/shared';
 import type { CampusClient } from './client';
 import { mapSupabaseError, unwrap } from './errors';
 
