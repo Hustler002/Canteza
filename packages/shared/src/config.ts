@@ -8,6 +8,10 @@ export const PLATFORM_DEFAULTS = {
   minOrderPaise: 0,
   maxQuantityPerItem: 20,
   maxItemsPerOrder: 50,
-  /** Partner's cut of the delivery fee; the rest is platform margin. */
-  partnerPayoutPaise: 800, // ₹8
+  /**
+   * Our only revenue: a slice of the delivery fee. The canteen keeps 100% of the
+   * food subtotal and the rest of the delivery fee (₹8), out of which it pays its
+   * own delivery staff. Deliberately small — canteens need to profit first.
+   */
+  platformFeePaise: 200, // ₹2 of the ₹10 delivery fee
 } as const;

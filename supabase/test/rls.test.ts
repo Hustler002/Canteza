@@ -140,10 +140,14 @@ describe('students', () => {
     expect(rows[0]!.full_name).not.toBe('hacked');
   });
 
-  it('cannot read the delivery pool', async () => {
+  it('cannot see a canteen’s ready queue the way its partners can', async () => {
+    await db.asOwner();
+    await db.query(`update public.orders set status = 'ready' where id = $1`, [arjunsOrder]);
     await db.asUser(campus.student);
-    const { rows } = await db.query(`select * from public.delivery_pool`);
+    const { rows } = await db.query(`select id from public.orders where id = $1`, [arjunsOrder]);
     expect(rows).toEqual([]);
+    await db.asOwner();
+    await db.query(`update public.orders set status = 'pending' where id = $1`, [arjunsOrder]);
   });
 
   it('cannot see another student’s notifications', async () => {
@@ -204,21 +208,43 @@ describe('delivery partners', () => {
     expect(await visibleOrders()).toEqual([]);
   });
 
-  it('sees the pool without the student’s room number', async () => {
+  it('sees its own canteen’s ready queue, with the full room-level address', async () => {
     await db.asOwner();
     await db.query(`update public.orders set status = 'ready' where id = $1`, [riyasOrder]);
 
     await db.asUser(campus.partner);
-    const { rows, fields } = await db.query<Record<string, unknown>>(
-      `select * from public.delivery_pool`,
+    const { rows } = await db.query<{ id: string; room: string; hostel_label: string }>(
+      `select id, room, hostel_label from public.orders
+        where status = 'ready' and delivery_partner_id is null`,
     );
     expect(rows).toHaveLength(1);
-    const columns = fields.map((f) => f.name);
-    expect(columns).toContain('hostel_label');
-    expect(columns).toContain('partner_payout_paise');
-    // The room is what a partner does not need until they have taken the job.
-    expect(columns).not.toContain('room');
-    expect(columns).not.toContain('student_id');
+    // Room-level delivery is the product; the partner is this canteen's own staff.
+    expect(rows[0]).toMatchObject({
+      id: riyasOrder,
+      room: '214',
+      hostel_label: 'Aryabhatta Hostel',
+    });
+  });
+
+  it('never sees another canteen’s ready order', async () => {
+    await db.asOwner();
+    await db.query(`update public.orders set status = 'ready' where id = $1`, [juiceOrder]);
+
+    // Vikram delivers for Main Canteen: the Juice Corner order is invisible to him.
+    await db.asUser(campus.partner);
+    expect(await visibleOrders()).toEqual([riyasOrder]);
+
+    // And Sana, who delivers for Juice Corner, sees only that one.
+    await db.asUser(campus.juicePartner);
+    expect(await visibleOrders()).toEqual([juiceOrder]);
+  });
+
+  it('cannot claim another canteen’s order', async () => {
+    await db.asUser(campus.juicePartner);
+    await expectError(
+      () => db.query(`select public.claim_delivery($1::uuid)`, [riyasOrder]),
+      'FORBIDDEN',
+    );
   });
 
   it('sees the full address only once it holds the order', async () => {
@@ -244,9 +270,28 @@ describe('delivery partners', () => {
       ]),
     ).rejects.toThrow(denied);
     await expectError(
-      () => db.query(`select public.admin_set_partner_approval($1::uuid, true)`, [campus.partner]),
+      () =>
+        db.query(`select public.admin_set_partner_canteen($1::uuid, $2::uuid, true)`, [
+          campus.partner,
+          campus.mainCanteen,
+        ]),
       'FORBIDDEN',
     );
+  });
+
+  it('cannot move itself to another canteen, or reinstate itself after being let go', async () => {
+    await db.asUser(campus.partner);
+    await expect(
+      db.query(`update public.delivery_partners set canteen_id = $2 where profile_id = $1`, [
+        campus.partner,
+        campus.juiceCorner,
+      ]),
+    ).rejects.toThrow(denied);
+    await expect(
+      db.query(`update public.delivery_partners set is_active = true where profile_id = $1`, [
+        campus.partner,
+      ]),
+    ).rejects.toThrow(denied);
   });
 
   it('can still toggle its own online status', async () => {
@@ -327,5 +372,50 @@ describe('reviews', () => {
         [juiceOrder, campus.otherStudent, campus.juiceCorner],
       ),
     ).rejects.toThrow(/row-level security/i);
+  });
+});
+
+describe('who can see whose name', () => {
+  it('lets the canteen and the student see the partner carrying a live order', async () => {
+    await db.asOwner();
+    await db.query(
+      `update public.orders set status = 'assigned', delivery_partner_id = $2 where id = $1`,
+      [riyasOrder, campus.partner],
+    );
+
+    // The canteen needs to know which of its own staff has the order.
+    await db.asUser(campus.staff);
+    const canteenView = await db.query<{ full_name: string }>(
+      `select full_name from public.profiles where id = $1`,
+      [campus.partner],
+    );
+    expect(canteenView.rows[0]?.full_name).toBe('Vikram Singh');
+
+    // The student sees who is bringing their food.
+    await db.asUser(campus.student);
+    const studentView = await db.query<{ full_name: string }>(
+      `select full_name from public.profiles where id = $1`,
+      [campus.partner],
+    );
+    expect(studentView.rows[0]?.full_name).toBe('Vikram Singh');
+  });
+
+  it('stops an unrelated student seeing the partner', async () => {
+    await db.asUser(campus.otherStudent);
+    const { rows } = await db.query(`select full_name from public.profiles where id = $1`, [
+      campus.partner,
+    ]);
+    expect(rows).toEqual([]);
+  });
+
+  it('ends the mutual visibility once the order is delivered', async () => {
+    await db.asOwner();
+    await db.query(`update public.orders set status = 'delivered' where id = $1`, [riyasOrder]);
+
+    await db.asUser(campus.student);
+    const { rows } = await db.query(`select full_name from public.profiles where id = $1`, [
+      campus.partner,
+    ]);
+    expect(rows).toEqual([]);
   });
 });

@@ -43,7 +43,7 @@ describe('place_order — totals', () => {
     await db.asOwner();
     const { rows } = await db.query<Record<string, number | string>>(
       `select subtotal_paise, discount_paise, delivery_fee_paise, total_paise,
-              partner_payout_paise, canteen_name_snapshot, hostel_label, block, room, status
+              platform_fee_paise, canteen_name_snapshot, hostel_label, block, room, status
          from public.orders where id = $1`,
       [id],
     );
@@ -53,7 +53,7 @@ describe('place_order — totals', () => {
       discount_paise: 0,
       delivery_fee_paise: PLATFORM_DEFAULTS.deliveryFeePaise,
       total_paise: 15000,
-      partner_payout_paise: PLATFORM_DEFAULTS.partnerPayoutPaise,
+      platform_fee_paise: PLATFORM_DEFAULTS.platformFeePaise,
       canteen_name_snapshot: 'Main Canteen',
       hostel_label: 'Aryabhatta Hostel',
       block: 'A',

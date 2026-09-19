@@ -145,13 +145,35 @@ create table public.canteen_staff (
 -- One staff account belongs to one canteen; the RLS helper depends on that.
 create unique index canteen_staff_one_canteen on public.canteen_staff (profile_id);
 
+-- A delivery partner belongs to ONE canteen (ADR 008). External couriers cannot enter
+-- campus, so each canteen employs its own delivery staff and they only ever carry that
+-- canteen's food.
+--
+-- The primary key is (profile_id, canteen_id) rather than profile_id alone so that a
+-- person who moves between canteens keeps their old row: historical orders still point
+-- at the canteen they actually delivered for. The partial unique index below is what
+-- enforces "one active canteen per person" at any moment.
 create table public.delivery_partners (
-  profile_id  uuid primary key references public.profiles (id) on delete cascade,
+  profile_id  uuid        not null references public.profiles (id) on delete cascade,
+  canteen_id  uuid        not null references public.canteens (id) on delete cascade,
   is_approved boolean     not null default false,
+  -- Set false by the canteen when the person stops working there. Distinct from
+  -- profiles.is_active (the whole account) and is_approved (the admin's vetting).
+  is_active   boolean     not null default true,
+  -- The partner's own shift toggle.
   is_online   boolean     not null default false,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  primary key (profile_id, canteen_id)
 );
+
+-- One person delivers for at most one canteen at a time. Transferring someone means
+-- deactivating the old row and adding a new one, which keeps history intact.
+create unique index delivery_partner_one_active_canteen
+  on public.delivery_partners (profile_id) where is_active;
+
+create index delivery_partners_by_canteen on public.delivery_partners (canteen_id)
+  where is_active and is_approved;
 
 create trigger delivery_partners_touch before update on public.delivery_partners
   for each row execute function public.touch_updated_at();
@@ -252,7 +274,11 @@ create table public.orders (
   delivery_fee_paise  integer not null default 0 check (delivery_fee_paise >= 0),
   packaging_fee_paise integer not null default 0 check (packaging_fee_paise >= 0),
   total_paise         integer not null check (total_paise >= 0),
-  partner_payout_paise integer not null default 0 check (partner_payout_paise >= 0),
+  -- Our entire revenue: a slice of the delivery fee. The canteen keeps the food
+  -- subtotal in full plus the remainder of the delivery fee, and pays its own
+  -- delivery staff out of that. Snapshotted so changing the split never rewrites
+  -- past settlements.
+  platform_fee_paise  integer not null default 0 check (platform_fee_paise >= 0),
 
   coupon_id           uuid references public.coupons (id),
   coupon_code_snapshot text,
@@ -270,17 +296,32 @@ create table public.orders (
     total_paise = subtotal_paise - discount_paise + delivery_fee_paise + packaging_fee_paise
   ),
   constraint order_discount_within_subtotal check (discount_paise <= subtotal_paise),
+  constraint order_platform_fee_within_delivery check (platform_fee_paise <= delivery_fee_paise),
   -- A double-tapped "Place order" resolves to one row.
   constraint orders_idempotent unique (student_id, idempotency_key)
 );
+
+-- THE business rule of ADR 008, enforced declaratively rather than by a trigger or an
+-- application check: a delivery partner can only ever be attached to an order from their
+-- own canteen.
+--
+-- Because delivery_partner_id is nullable and Postgres foreign keys default to
+-- MATCH SIMPLE, an unassigned order skips this check entirely. The moment a partner is
+-- attached, the (partner, canteen) pair must exist in delivery_partners -- so a
+-- cross-canteen assignment is not merely rejected by our code, it is unrepresentable.
+alter table public.orders
+  add constraint order_partner_belongs_to_canteen
+  foreign key (delivery_partner_id, canteen_id)
+  references public.delivery_partners (profile_id, canteen_id);
 
 create trigger orders_touch before update on public.orders
   for each row execute function public.touch_updated_at();
 
 create index orders_by_student on public.orders (student_id, created_at desc);
 create index orders_by_canteen on public.orders (canteen_id, status);
--- The delivery pool: a small, hot, partial index.
-create index orders_ready_pool on public.orders (created_at) where status = 'ready';
+-- Each canteen's unclaimed ready queue -- the query the delivery app runs on a timer.
+create index orders_ready_by_canteen on public.orders (canteen_id, created_at)
+  where status = 'ready' and delivery_partner_id is null;
 create index orders_by_partner on public.orders (delivery_partner_id, created_at desc)
   where delivery_partner_id is not null;
 
@@ -343,6 +384,8 @@ insert into public.order_transitions (from_status, to_status, actor) values
   ('preparing', 'cancelled', 'admin'),
   ('ready',     'assigned',  'delivery'),
   ('ready',     'assigned',  'admin'),
+  ('ready',     'delivered', 'canteen'),
+  ('ready',     'delivered', 'admin'),
   ('ready',     'cancelled', 'admin'),
   ('assigned',  'picked_up', 'delivery'),
   ('assigned',  'picked_up', 'admin'),

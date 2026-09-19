@@ -39,6 +39,13 @@ const CANTEENS = {
   night: 'c0000000-0000-4000-8000-000000000003',
   juice: 'c0000000-0000-4000-8000-000000000004',
 };
+const CANTEEN_NAMES = {
+  [CANTEENS.main]: 'Main Canteen',
+  [CANTEENS.hostel]: 'Hostel Canteen',
+  [CANTEENS.night]: 'Night Canteen',
+  [CANTEENS.juice]: 'Juice Corner',
+};
+
 const HOSTELS = {
   aryabhatta: 'a0000000-0000-4000-8000-000000000001',
   ramanujan: 'a0000000-0000-4000-8000-000000000002',
@@ -157,7 +164,7 @@ async function main() {
       method: 'PATCH',
       body: { role: person.role, full_name: person.name },
     });
-    if (person.canteen) {
+    if (person.role === 'canteen') {
       await api('/rest/v1/canteen_staff', {
         method: 'POST',
         headers: { Prefer: 'resolution=ignore-duplicates' },
@@ -168,10 +175,17 @@ async function main() {
       await api('/rest/v1/delivery_partners', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates' },
-        body: { profile_id: ids[person.key], is_approved: !!person.approved, is_online: true },
+        body: {
+          profile_id: ids[person.key],
+          canteen_id: person.canteen,
+          is_approved: true,
+          is_active: true,
+          is_online: true,
+        },
       });
     }
-    console.log(`  ${person.email.padEnd(26)} ${person.role}`);
+    const where = person.canteen ? ` @ ${CANTEEN_NAMES[person.canteen]}` : '';
+    console.log(`  ${person.email.padEnd(26)} ${person.role}${where}`);
   }
 
   console.log('\nPlacing demo orders through the real RPCs…');

@@ -1,3 +1,4 @@
+export * from './database.types';
 export * from './brand';
 export * from './config';
 export * from './errors';

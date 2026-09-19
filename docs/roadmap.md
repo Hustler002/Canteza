@@ -8,9 +8,9 @@ half-built screens.
 | 0     | Repository assessment, architecture, ADRs                                        | ✅ done |
 | 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done |
 | 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done |
-| 3     | Auth + role routing (mobile shell, admin shell)                                  | ⬜ next |
-| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ⬜      |
-| 5     | Delivery partner: pool, claim, pickup, deliver, earnings                         | ⬜      |
+| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done |
+| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
+| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ⬜ next |
 | 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ⬜      |
 | 7     | Secondary: ratings, favourites, reorder, coupons, complaints, analytics          | ⬜      |
 | 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜      |
@@ -36,9 +36,11 @@ Three migrations plus seed data, all executed by 65 tests running on in-process 
   `packages/shared`.
 - `..._rls.sql` — helpers (`auth_role`, `is_admin`, `my_canteen_id`,
   `is_delivery_partner`), RLS on every table, grants that withhold `profiles.role` and
-  `delivery_partners.is_approved` at the column level, and the `delivery_pool` view.
+  `delivery_partners.is_approved`/`is_active`/`canteen_id` at the column level.
 - `..._functions.sql` — `place_order`, `transition_order`, `claim_delivery`,
   `release_delivery`, `notify_order`.
+- Delivery is canteen-scoped (ADR 008): a partner belongs to one canteen, and a composite
+  foreign key on `orders` makes a cross-canteen assignment unrepresentable.
 - `seed.sql` — four canteens, 28 menu items, four hostels, three coupons.
 - `seed-users.mjs` — accounts via the Auth API, then demo orders placed through the real
   RPCs over HTTP.
@@ -47,7 +49,18 @@ Exit criteria met: a student cannot read another student's order; a repeated ide
 key yields one order; a second claim on a taken delivery raises
 `DELIVERY_ALREADY_CLAIMED`. The one gap is genuine parallelism — see ADR 007.
 
-## Phase 3 — auth + shells
+## Phase 3 — auth + shells ✅
+
+`packages/api` (typed client, auth, error mapping, query keys), `apps/mobile` (Expo SDK 57,
+expo-router route groups per role, chunked SecureStore session) and `apps/admin` (Next 16,
+`proxy.ts` session refresh, `getClaims()` not `getSession()`). Types are generated from the
+migrations by `scripts/gen-types.mjs` — `supabase gen types` shells out to Docker even with
+`--db-url`, so it introspects PGlite instead.
+
+Verified: the Metro bundle resolves the workspace packages (1368 modules, shared domain code
+present in the output), and `next build` succeeds with `/` dynamic and `/login` static.
+
+### Original plan
 
 Expo app with `expo-router` route groups per role; Next.js admin with middleware-guarded
 routes. Session persistence, logout, role-based landing. Design tokens and the base
@@ -63,8 +76,8 @@ change live. This is the phase that makes the product real.
 
 ## Phase 5 — delivery
 
-Open pool of `ready` orders, atomic claim, pickup, deliver, daily history and earnings.
-Completes the end-to-end flow.
+The partner's own canteen's ready queue, atomic claim, pickup, deliver, daily history and
+earnings. Canteen-scoped throughout (ADR 008). Completes the end-to-end flow.
 
 ## Phase 6 — admin
 

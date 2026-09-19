@@ -44,17 +44,29 @@ as $$
    where cs.profile_id = (select auth.uid());
 $$;
 
+-- The canteen this partner delivers for, or null if the caller is not a working
+-- partner. Delivery authorization is canteen-scoped (ADR 008), so almost everything
+-- the delivery app can see keys off this one value.
+create or replace function public.my_delivery_canteen_id() returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select dp.canteen_id
+    from public.delivery_partners dp
+    join public.profiles p on p.id = dp.profile_id
+   where dp.profile_id = (select auth.uid())
+     and dp.is_approved and dp.is_active and p.is_active;
+$$;
+
 create or replace function public.is_delivery_partner() returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select exists (
-    select 1 from public.delivery_partners dp
-     join public.profiles p on p.id = dp.profile_id
-     where dp.profile_id = (select auth.uid()) and dp.is_approved and p.is_active
-  );
+  select public.my_delivery_canteen_id() is not null;
 $$;
 
 -- Read a platform setting, falling back to the value baked into the app.
@@ -113,7 +125,9 @@ grant select on public.hostels, public.food_categories, public.canteens,
 grant select on public.profiles to authenticated;
 grant update (full_name, phone, avatar_url) on public.profiles to authenticated;
 
--- `is_approved` is deliberately absent: a partner may not approve themselves.
+-- `is_approved`, `is_active` and `canteen_id` are deliberately absent: a partner may
+-- not approve themselves, un-deactivate themselves after their canteen lets them go,
+-- or move themselves to a busier canteen. Those go through the functions below.
 grant select on public.delivery_partners to authenticated;
 grant update (is_online) on public.delivery_partners to authenticated;
 
@@ -143,19 +157,33 @@ grant usage on sequence public.order_code_seq to authenticated;
 
 create policy profiles_read_self on public.profiles
   for select to authenticated
-  using (id = (select auth.uid()) or public.is_admin());
+  using (id = (select auth.uid()) or (select public.is_admin()));
 
--- A canteen sees the student's name on an order it is preparing; a partner sees
--- the name of whoever they are delivering to. Both only while the order is live.
+-- Everyone working on a live order can see the name of everyone else on it, and
+-- nothing beyond that. Once the order is terminal the mutual visibility ends.
+--
+--   canteen  <-> student        (who ordered)
+--   partner  <-> student        (whose door)
+--   canteen  <-> its partner    (which of my staff is carrying it)
+--   student  <-> the partner    ("Vikram is bringing your order")
 create policy profiles_read_counterparty on public.profiles
   for select to authenticated
   using (
+    -- The student on an order I am the canteen for, or am delivering.
     exists (
       select 1 from public.orders o
        where o.student_id = public.profiles.id
          and o.status not in ('delivered', 'cancelled', 'rejected')
          and (o.canteen_id = (select public.my_canteen_id())
               or o.delivery_partner_id = (select auth.uid()))
+    )
+    -- The partner carrying an order I am the canteen for, or that I placed.
+    or exists (
+      select 1 from public.orders o
+       where o.delivery_partner_id = public.profiles.id
+         and o.status not in ('delivered', 'cancelled', 'rejected')
+         and (o.canteen_id = (select public.my_canteen_id())
+              or o.student_id = (select auth.uid()))
     )
   );
 
@@ -169,14 +197,14 @@ create policy profiles_update_self on public.profiles
 -- ---------------------------------------------------------------------------
 
 create policy hostels_read on public.hostels
-  for select to authenticated using (is_active or public.is_admin());
+  for select to authenticated using (is_active or (select public.is_admin()));
 create policy hostels_admin on public.hostels
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy canteens_read on public.canteens
-  for select to authenticated using (is_active or public.is_admin());
+  for select to authenticated using (is_active or (select public.is_admin()));
 create policy canteens_admin on public.canteens
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 -- Staff adjust their own canteen's hours and pause switch.
 create policy canteens_staff_update on public.canteens
   for update to authenticated
@@ -185,24 +213,31 @@ create policy canteens_staff_update on public.canteens
 
 create policy canteen_staff_read on public.canteen_staff
   for select to authenticated
-  using (profile_id = (select auth.uid()) or public.is_admin());
+  using (profile_id = (select auth.uid()) or (select public.is_admin()));
 create policy canteen_staff_admin on public.canteen_staff
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
+-- A canteen sees its own delivery staff; a partner sees their own record.
 create policy delivery_partners_read on public.delivery_partners
   for select to authenticated
-  using (profile_id = (select auth.uid()) or public.is_admin());
+  using (
+    profile_id = (select auth.uid())
+    or canteen_id = (select public.my_canteen_id())
+    or (select public.is_admin())
+  );
+-- The partner's shift toggle. `is_active` and `is_approved` have no grant, so this
+-- can only ever change is_online.
 create policy delivery_partners_self_update on public.delivery_partners
   for update to authenticated
   using (profile_id = (select auth.uid()))
   with check (profile_id = (select auth.uid()));
 create policy delivery_partners_admin on public.delivery_partners
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy food_categories_read on public.food_categories
   for select to authenticated using (true);
 create policy food_categories_admin on public.food_categories
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy order_transitions_read on public.order_transitions
   for select to authenticated using (true);
@@ -210,7 +245,7 @@ create policy order_transitions_read on public.order_transitions
 create policy platform_settings_read on public.platform_settings
   for select to authenticated using (true);
 create policy platform_settings_admin on public.platform_settings
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- ---------------------------------------------------------------------------
 -- menu
@@ -218,7 +253,7 @@ create policy platform_settings_admin on public.platform_settings
 
 create policy menu_items_read on public.menu_items
   for select to authenticated
-  using (is_active or canteen_id = (select public.my_canteen_id()) or public.is_admin());
+  using (is_active or canteen_id = (select public.my_canteen_id()) or (select public.is_admin()));
 
 -- A canteen manages its own menu and no one else's.
 create policy menu_items_own_canteen on public.menu_items
@@ -227,16 +262,16 @@ create policy menu_items_own_canteen on public.menu_items
   with check (canteen_id = (select public.my_canteen_id()));
 
 create policy menu_items_admin on public.menu_items
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy coupons_read on public.coupons
   for select to authenticated
   using (
-    public.is_admin()
+    (select public.is_admin())
     or (is_active and valid_from <= now() and (valid_until is null or valid_until > now()))
   );
 create policy coupons_admin on public.coupons
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+  for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- ---------------------------------------------------------------------------
 -- orders
@@ -249,11 +284,17 @@ create policy orders_read on public.orders
     student_id = (select auth.uid())
     or canteen_id = (select public.my_canteen_id())
     or delivery_partner_id = (select auth.uid())
-    or public.is_admin()
+    -- A partner sees their own canteen's queue of unclaimed ready orders, and nothing
+    -- else. No other canteen's orders are visible at any status.
+    or (status = 'ready'
+        and delivery_partner_id is null
+        and canteen_id = (select public.my_delivery_canteen_id()))
+    or (select public.is_admin())
   );
 
--- A partner sees the hostel, block and room only for an order they are holding.
--- Unclaimed orders are exposed through public.delivery_pool, which omits them.
+-- Room-level delivery is the product, so a partner gets the full destination
+-- (hostel, block, room, instructions) for their own canteen's orders. They are that
+-- canteen's staff, not an anonymous courier.
 
 create policy order_items_read on public.order_items
   for select to authenticated
@@ -275,33 +316,13 @@ create policy payments_read on public.payments
 
 create policy coupon_redemptions_read on public.coupon_redemptions
   for select to authenticated
-  using (student_id = (select auth.uid()) or public.is_admin());
+  using (student_id = (select auth.uid()) or (select public.is_admin()));
 
--- ---------------------------------------------------------------------------
--- the delivery pool
--- ---------------------------------------------------------------------------
--- A security-definer view (the Postgres default) so it can read past the orders
--- policy, projecting only what a partner needs to decide whether to take the job.
--- The student's room number is NOT in it. The partner check is inside the view.
-
-create view public.delivery_pool as
-  select
-    o.id,
-    o.code,
-    o.canteen_id,
-    o.canteen_name_snapshot,
-    o.hostel_label,
-    o.block,
-    o.total_paise,
-    o.partner_payout_paise,
-    o.created_at,
-    (select count(*) from public.order_items oi where oi.order_id = o.id) as item_count
-  from public.orders o
-  where o.status = 'ready'
-    and o.delivery_partner_id is null
-    and public.is_delivery_partner();
-
-grant select on public.delivery_pool to authenticated;
+-- The campus-wide `delivery_pool` view that used to live here is gone. It existed to
+-- show unclaimed work across every canteen while hiding the student's room. Now that a
+-- partner is a specific canteen's employee, the orders policy above scopes the queue
+-- correctly on its own, and the partner legitimately needs the full address. One fewer
+-- object to keep in step with the table it projected.
 
 -- ---------------------------------------------------------------------------
 -- engagement
@@ -339,13 +360,13 @@ create policy notifications_mark_read on public.notifications
 
 create policy support_tickets_own on public.support_tickets
   for select to authenticated
-  using (student_id = (select auth.uid()) or public.is_admin());
+  using (student_id = (select auth.uid()) or (select public.is_admin()));
 create policy support_tickets_insert_own on public.support_tickets
   for insert to authenticated
   with check (student_id = (select auth.uid()));
 create policy support_tickets_admin on public.support_tickets
   for update to authenticated
-  using (public.is_admin()) with check (public.is_admin());
+  using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- ---------------------------------------------------------------------------
 -- admin-only escalation paths
@@ -373,8 +394,14 @@ begin
 end;
 $$;
 
-create or replace function public.admin_set_partner_approval(p_profile_id uuid, p_approved boolean)
-returns void
+-- Onboard a delivery partner to a canteen, or move an existing one. Deactivating any
+-- previous posting keeps delivery_partner_one_active_canteen satisfied and leaves the
+-- old row in place so historical orders still resolve.
+create or replace function public.admin_set_partner_canteen(
+  p_profile_id uuid,
+  p_canteen_id uuid,
+  p_approved   boolean default true
+) returns void
 language plpgsql
 security definer
 set search_path = ''
@@ -383,16 +410,60 @@ begin
   if not public.is_admin() then
     raise exception 'FORBIDDEN: admin only' using errcode = 'P0001';
   end if;
-  insert into public.delivery_partners (profile_id, is_approved)
-  values (p_profile_id, p_approved)
-  on conflict (profile_id) do update set is_approved = excluded.is_approved;
+  if not exists (select 1 from public.canteens where id = p_canteen_id and is_active) then
+    raise exception 'NOT_FOUND: canteen %', p_canteen_id using errcode = 'P0001';
+  end if;
+
+  update public.delivery_partners
+     set is_active = false, is_online = false
+   where profile_id = p_profile_id and canteen_id <> p_canteen_id and is_active;
+
+  insert into public.delivery_partners (profile_id, canteen_id, is_approved, is_active)
+  values (p_profile_id, p_canteen_id, p_approved, true)
+  on conflict (profile_id, canteen_id)
+    do update set is_approved = excluded.is_approved, is_active = true;
+
+  update public.profiles set role = 'delivery' where id = p_profile_id;
+end;
+$$;
+
+-- A canteen retires its own departed staff without waiting for an admin. It cannot
+-- reach another canteen's partners, and cannot approve anyone.
+create or replace function public.canteen_set_partner_active(
+  p_profile_id uuid,
+  p_active     boolean
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_canteen uuid := public.my_canteen_id();
+begin
+  if v_canteen is null then
+    raise exception 'FORBIDDEN: canteen staff only' using errcode = 'P0001';
+  end if;
+
+  -- Scoped to this canteen's own posting. An admin uses admin_set_partner_canteen.
+  update public.delivery_partners
+     set is_active = p_active,
+         is_online = case when p_active then is_online else false end
+   where profile_id = p_profile_id
+     and canteen_id = v_canteen;
+
+  if not found then
+    raise exception 'NOT_FOUND: no delivery partner % at this canteen', p_profile_id
+      using errcode = 'P0001';
+  end if;
 end;
 $$;
 
 revoke all on function public.admin_set_role(uuid, text) from public;
-revoke all on function public.admin_set_partner_approval(uuid, boolean) from public;
+revoke all on function public.admin_set_partner_canteen(uuid, uuid, boolean) from public;
+revoke all on function public.canteen_set_partner_active(uuid, boolean) from public;
 grant execute on function public.admin_set_role(uuid, text) to authenticated;
-grant execute on function public.admin_set_partner_approval(uuid, boolean) to authenticated;
+grant execute on function public.admin_set_partner_canteen(uuid, uuid, boolean) to authenticated;
+grant execute on function public.canteen_set_partner_active(uuid, boolean) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- realtime
@@ -401,11 +472,21 @@ grant execute on function public.admin_set_partner_approval(uuid, boolean) to au
 -- where Supabase's publication does not exist.
 
 do $$
+declare
+  v_table text;
 begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table public.orders;
-    alter publication supabase_realtime add table public.notifications;
-    alter publication supabase_realtime add table public.menu_items;
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    return;
   end if;
+  -- Adding a table that is already a member raises, which would fail the whole
+  -- migration on a database where the publication was pre-populated.
+  foreach v_table in array array['orders', 'notifications', 'menu_items'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = v_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', v_table);
+    end if;
+  end loop;
 end;
 $$;

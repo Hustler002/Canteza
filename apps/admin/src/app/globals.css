@@ -1,0 +1,171 @@
+/* Mirrors packages/../apps/mobile/src/theme.ts so the two surfaces look like one
+   product. Change a token here and in theme.ts together. */
+:root {
+  --primary: #e8590c;
+  --on-primary: #ffffff;
+  --primary-soft: #fff4e6;
+  --background: #fffdfb;
+  --surface: #ffffff;
+  --surface-alt: #efeae5;
+  --border: #d9d3cd;
+  --text: #16120e;
+  --text-muted: #6b625a;
+  --danger: #c92a2a;
+  --danger-soft: #ffe3e3;
+  --success: #2b8a3e;
+  --radius: 12px;
+  --radius-lg: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #f76707;
+    --primary-soft: #2a2724;
+    --background: #12100e;
+    --surface: #1c1917;
+    --surface-alt: #2a2724;
+    --border: #3d3936;
+    --text: #e8e4e0;
+    --text-muted: #8e8781;
+    --danger: #ff6b6b;
+    --danger-soft: #2a2724;
+    --success: #51cf66;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+h2 {
+  font-size: 20px;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+h3 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: grid;
+  gap: 24px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.stat {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.button {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius);
+  border: 0;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.field input {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.center {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login {
+  width: 100%;
+  max-width: 380px;
+  display: grid;
+  gap: 20px;
+}

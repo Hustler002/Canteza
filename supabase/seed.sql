@@ -14,7 +14,9 @@
 insert into public.platform_settings (key, value) values
   ('delivery_fee_paise',    '1000'),  -- ₹10
   ('packaging_fee_paise',   '0'),
-  ('partner_payout_paise',  '800'),   -- ₹8 of the ₹10 goes to the partner
+  -- Our only revenue. The canteen keeps the food subtotal in full plus the other ₹8
+  -- of the delivery fee, and pays its own delivery staff out of that.
+  ('platform_fee_paise',    '200'),   -- ₹2 of the ₹10 delivery fee
   ('max_quantity_per_item', '20'),
   ('max_items_per_order',   '50')
 on conflict (key) do nothing;

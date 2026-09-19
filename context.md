@@ -19,12 +19,12 @@ to handle real money, real orders, and real concurrent users on day one.
 
 ## 2. Who uses it
 
-| Role                 | Device        | What they do                                                    |
-| -------------------- | ------------- | --------------------------------------------------------------- |
-| **Student**          | Mobile app    | Browse canteens, search, cart, checkout, track, rate, reorder   |
-| **Canteen staff**    | Mobile app    | Receive orders, accept/reject, prepare, mark ready, manage menu |
-| **Delivery partner** | Mobile app    | See the pool, claim, pick up, deliver, view earnings            |
-| **Admin**            | Web dashboard | Manage users/canteens/hostels/food, monitor orders and revenue  |
+| Role                 | Device        | What they do                                                       |
+| -------------------- | ------------- | ------------------------------------------------------------------ |
+| **Student**          | Mobile app    | Browse canteens, search, cart, checkout, track, rate, reorder      |
+| **Canteen staff**    | Mobile app    | Receive orders, accept/reject, prepare, mark ready, manage menu    |
+| **Delivery partner** | Mobile app    | See their canteen's ready queue, claim, pick up, deliver, earnings |
+| **Admin**            | Web dashboard | Manage users/canteens/hostels/food, monitor orders and revenue     |
 
 Canteen staff may not be technical. Their screens are large-button, low-navigation, and
 loud about new orders. Delivery partners use the app one-handed while walking.
@@ -36,7 +36,7 @@ Everything else is secondary to this path working reliably:
 ```
 student browses → adds to cart → checkout (hostel + block + room) → places order
    → canteen receives it live → accepts → prepares → marks ready
-   → partner claims it from the pool → picks up → delivers
+   → that canteen's own partner claims it → picks up → delivers
    → student sees "Delivered" → rates / reorders
 ```
 
@@ -119,10 +119,12 @@ Both are argued in [ADR 005](./docs/decisions/005-order-state-machine.md).
 1. **`out_for_delivery` was removed**, merged into `picked_up`. On a walkable campus, the
    partner picking up the bag and departing is one moment. A second tap that always
    immediately follows the first is ceremony. Students still see "On the way".
-2. **Delivery assignment is a pull, not a push.** `ready` orders form an open pool and the
-   first partner to claim wins, atomically. A dispatcher would need an assignment
-   algorithm, acceptance timeouts, reassignment, and offline handling — none of which five
-   partners on one campus need. The schema does not block adding dispatch later.
+2. **Delivery assignment is a pull, not a push — and it is canteen-scoped.** External
+   couriers cannot enter campus, so every canteen employs its own delivery staff. A
+   partner belongs to one canteen and claims from that canteen's ready queue; there is no
+   campus-wide pool. When nobody is on shift the counter delivers it themselves. See
+   [ADR 008](./docs/decisions/008-canteen-scoped-delivery.md), which supersedes the
+   global-pool part of ADR 005.
 
 ## 7. What is deliberately not being built
 
@@ -145,6 +147,8 @@ batching or a second campus actually arrives.
 ## 9. Launch assumptions
 
 One college. Several canteens. Students live in hostels. Delivery is on foot, inside
-campus. Delivery is charged separately (₹10 default, ₹8 to the partner). Canteens manage
-their own menus. Hundreds of orders a day, not millions. Optimise for reliability on one
+campus. Delivery is charged separately: ₹10, of which ₹8 goes to the canteen (who pays
+their own delivery staff) and ₹2 is our entire revenue — we take nothing on food, because
+canteens need to profit first. Canteens manage their own menus and their own delivery
+staff. Hundreds of orders a day, not millions. Optimise for reliability on one
 campus, not for scale that does not exist yet.

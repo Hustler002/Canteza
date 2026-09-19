@@ -39,8 +39,8 @@ begin
      where cs.canteen_id = v_order.canteen_id;
   end if;
 
-  -- The open pool is discovered by querying public.delivery_pool, so partners are
-  -- only notified about an order they already hold.
+  -- A canteen's ready queue is visible to its own partners through the orders policy,
+  -- so partners are only notified about an order they already hold.
   if 'delivery' = any (p_audiences) and v_order.delivery_partner_id is not null then
     insert into public.notifications (user_id, audience, order_id, status)
     values (v_order.delivery_partner_id, 'delivery', p_order_id, p_status);
@@ -85,7 +85,7 @@ declare
   v_discount  integer := 0;
   v_delivery_fee  integer;
   v_packaging_fee integer;
-  v_payout    integer;
+  v_platform_fee integer;
   v_max_qty   integer;
   v_max_units integer;
   v_redeemed  integer;
@@ -216,20 +216,22 @@ begin
 
   v_delivery_fee  := public.setting_int('delivery_fee_paise', 1000);
   v_packaging_fee := public.setting_int('packaging_fee_paise', 0);
-  v_payout        := public.setting_int('partner_payout_paise', 800);
+  -- Our whole revenue line. The canteen keeps the food subtotal in full plus the
+  -- rest of the delivery fee, and pays its own delivery staff from that.
+  v_platform_fee  := least(public.setting_int('platform_fee_paise', 200), v_delivery_fee);
 
   begin
     insert into public.orders (
       student_id, canteen_id, canteen_name_snapshot,
       hostel_id, hostel_label, block, room, delivery_note,
       subtotal_paise, discount_paise, delivery_fee_paise, packaging_fee_paise,
-      total_paise, partner_payout_paise,
+      total_paise, platform_fee_paise,
       coupon_id, coupon_code_snapshot, idempotency_key
     ) values (
       v_student, v_canteen.id, v_canteen.name,
       v_hostel.id, v_hostel.name, p_block, trim(p_room), coalesce(p_note, ''),
       v_subtotal, v_discount, v_delivery_fee, v_packaging_fee,
-      v_subtotal - v_discount + v_delivery_fee + v_packaging_fee, v_payout,
+      v_subtotal - v_discount + v_delivery_fee + v_packaging_fee, v_platform_fee,
       v_coupon.id, v_coupon.code, p_idempotency_key
     ) returning id into v_order_id;
   exception when unique_violation then
@@ -330,6 +332,17 @@ begin
       using errcode = 'P0001';
   end if;
 
+  -- A prepaid order is not real work until the money has actually been verified
+  -- server-side (ADR 006). Cash is settled at the door, so COD is exempt; anything
+  -- else must reach `success` before a kitchen commits gas and ingredients to it.
+  if p_to = 'accepted' and exists (
+    select 1 from public.payments pay
+     where pay.order_id = p_order_id and pay.method <> 'cod' and pay.status <> 'success'
+  ) then
+    raise exception 'PAYMENT_UNVERIFIED: order % is not paid for', p_order_id
+      using errcode = 'P0001';
+  end if;
+
   -- Conditional update: if anything moved the row since we read it, we lose.
   update public.orders
      set status = p_to,
@@ -360,6 +373,12 @@ begin
     update public.payments
        set status = 'failed', failure_reason = coalesce(p_reason, p_to)
      where order_id = p_order_id and status in ('initiated', 'pending');
+
+    -- ...and it consumed no coupon. Releasing the redemption hands the code back to
+    -- the student, who otherwise loses it because the canteen ran out of gas.
+    -- orders.coupon_code_snapshot still records what was applied at the time.
+    delete from public.coupon_redemptions where order_id = p_order_id;
+
     v_audiences := array['student', 'canteen', 'delivery'];
   end if;
 
@@ -381,20 +400,32 @@ set search_path = ''
 as $$
 declare
   v_uid     uuid := (select auth.uid());
+  v_canteen uuid := public.my_delivery_canteen_id();
   v_updated integer;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED: no session' using errcode = 'P0001';
   end if;
-  if not public.is_delivery_partner() then
-    raise exception 'FORBIDDEN: not an approved delivery partner' using errcode = 'P0001';
+  if v_canteen is null then
+    raise exception 'FORBIDDEN: not an active delivery partner' using errcode = 'P0001';
+  end if;
+
+  -- Distinguish "someone beat me to it" from "that is not my canteen's order", so the
+  -- app can say something true. The composite foreign key on orders would refuse a
+  -- cross-canteen pairing anyway; this exists to make the failure legible.
+  if exists (
+    select 1 from public.orders o
+     where o.id = p_order_id and o.canteen_id <> v_canteen
+  ) then
+    raise exception 'FORBIDDEN: order belongs to another canteen' using errcode = 'P0001';
   end if;
 
   update public.orders
      set status = 'assigned', delivery_partner_id = v_uid
    where id = p_order_id
      and status = 'ready'
-     and delivery_partner_id is null;
+     and delivery_partner_id is null
+     and canteen_id = v_canteen;
 
   get diagnostics v_updated = row_count;
   if v_updated = 0 then

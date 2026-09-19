@@ -16,11 +16,24 @@ export default tseslint.config(
     },
   },
   {
-    // Node scripts: a CLI seeder is allowed to talk to the terminal.
-    files: ['supabase/**/*.mjs'],
+    // Node scripts: a CLI seeder or generator is allowed to talk to the terminal.
+    files: ['supabase/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: {
-      globals: { process: 'readonly', console: 'readonly', fetch: 'readonly' },
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+      },
     },
     rules: { 'no-console': 'off' },
+  },
+  {
+    // CommonJS build config that Metro and Babel load directly, not through the bundler.
+    files: ['apps/*/metro.config.js', 'apps/*/babel.config.js'],
+    languageOptions: {
+      globals: { module: 'writable', require: 'readonly', __dirname: 'readonly' },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
 );

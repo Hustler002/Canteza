@@ -8,6 +8,10 @@ import type { Role } from './roles';
  * `out_for_delivery` is deliberately absent: on a walkable campus, "picked up" and
  * "out for delivery" are the same physical moment, and one tap is better than two
  * for a partner holding a phone. Students see `picked_up` as "On the way".
+ *
+ * Delivery is canteen-scoped (ADR 008): a partner belongs to one canteen and may only
+ * claim that canteen's orders. `ready -> assigned` is therefore a claim from that
+ * canteen's queue, not from a campus-wide pool.
  */
 export const ORDER_STATUSES = [
   'pending',
@@ -45,7 +49,10 @@ export const ORDER_TRANSITIONS: TransitionMap = {
     cancelled: ['admin'],
   },
   ready: {
+    // Claimed by one of this canteen's own delivery partners.
     assigned: ['delivery', 'admin'],
+    // No partner on shift: the counter walks it over themselves.
+    delivered: ['canteen', 'admin'],
     cancelled: ['admin'],
   },
   assigned: {

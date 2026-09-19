@@ -55,8 +55,11 @@ an order paid because the frontend said so.
   That is an operations problem for one campus, tracked by `payments` rows rather than
   solved in code. Settlement reporting is Phase 7.
 - Online payment introduces a window where the order exists but payment is unconfirmed.
-  Handled by holding the order at `pending` until payment is `success`, with a timeout that
-  cancels unpaid orders — so a canteen never cooks food that was never paid for.
+  `transition_order` refuses `pending -> accepted` while a non-COD payment is not yet
+  `success`, raising `PAYMENT_UNVERIFIED`, so a canteen never cooks food nobody paid for.
+  The order can still be rejected or cancelled in that state. **Still missing:** a timeout
+  that cancels orders left unpaid; it needs a scheduled job and lands with Razorpay in
+  Phase 8. Until then an abandoned prepaid order sits at `pending` until someone cancels it.
 - Razorpay webhooks can arrive out of order or twice. The handler is idempotent on
   `provider_payment_id`, and `canTransitionPayment` rejects illegal moves like
   `refunded → success`.

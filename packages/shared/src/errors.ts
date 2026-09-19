@@ -4,6 +4,11 @@
  */
 export const ERROR_CODES = {
   UNAUTHENTICATED: 'UNAUTHENTICATED',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  EMAIL_IN_USE: 'EMAIL_IN_USE',
+  WEAK_PASSWORD: 'WEAK_PASSWORD',
+  EMAIL_NOT_CONFIRMED: 'EMAIL_NOT_CONFIRMED',
+  RATE_LIMITED: 'RATE_LIMITED',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   INVALID_TRANSITION: 'INVALID_TRANSITION',
@@ -26,6 +31,13 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
 const USER_MESSAGES: Record<ErrorCode, string> = {
   UNAUTHENTICATED: 'Please sign in to continue.',
+  // Deliberately does not say which of the two was wrong -- that tells an attacker
+  // whether an email is registered.
+  INVALID_CREDENTIALS: 'That email and password do not match.',
+  EMAIL_IN_USE: 'An account with that email already exists. Try signing in.',
+  WEAK_PASSWORD: 'Use at least 8 characters, with a letter and a number.',
+  EMAIL_NOT_CONFIRMED: 'Check your email and confirm your address first.',
+  RATE_LIMITED: 'Too many attempts. Wait a minute and try again.',
   FORBIDDEN: "You don't have access to this.",
   NOT_FOUND: "We couldn't find that.",
   INVALID_TRANSITION: 'This order has already moved on. Refresh to see the latest status.',

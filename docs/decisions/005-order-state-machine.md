@@ -1,6 +1,11 @@
 # ADR 005 — Order state machine: explicit transition table, pull-based assignment
 
-Status: **accepted** · 2026-09-19
+Status: **accepted**, partially superseded · 2026-09-19
+
+> **Superseded in part by [ADR 008](./008-canteen-scoped-delivery.md).** The transition
+> table and the removal of `out_for_delivery` still stand. The _global_ pull model below
+> does not: delivery partners belong to a single canteen and claim only from that
+> canteen's queue. ADR 008 explains why and what changed.
 
 ## Decision
 

@@ -119,13 +119,16 @@ Three layers, each independently sufficient for its own scope:
 | -------- | ------------------------------------------------ | ------------------------------------------- |
 | Student  | own profile, own orders, all open canteens/menus | own profile, own orders via `place_order`   |
 | Canteen  | own canteen, own menu, orders for own canteen    | own menu; own orders via `transition_order` |
-| Delivery | orders in `ready` (pool) + own assigned orders   | own assignments via `claim_delivery`        |
+| Delivery | own canteen's ready queue + own assigned orders  | own assignments via `claim_delivery`        |
 | Admin    | everything                                       | everything, audited                         |
 
-A delivery partner sees the student's hostel/block/room **only for an order they hold**.
-Unclaimed work is offered through `public.delivery_pool`, a view that projects canteen,
-hostel and payout — and deliberately omits `room` and `student_id`. Deciding whether to
-take a job does not require knowing whose door it is.
+A delivery partner belongs to **one canteen** and can see only that canteen's work: their
+own assigned orders, plus that canteen's unclaimed `ready` queue (ADR 008). Another
+canteen's orders are invisible at every status. They do get the full room-level
+destination, because they are that canteen's own staff and walking to the door is the job.
+
+`delivery_partner.canteen_id = order.canteen_id` is guaranteed by a composite foreign key
+on `orders`, so a cross-canteen assignment is unrepresentable rather than merely rejected.
 
 Privileges are role-wide and a policy cannot restrict columns, so anything that must never
 be client-writable is withheld at the `GRANT`, not at the policy:
@@ -136,8 +139,10 @@ be client-writable is withheld at the `GRANT`, not at the policy:
 | `delivery_partners.is_approved` | Self-approval                             |
 | everything on `orders`          | All movement belongs to the RPC functions |
 
-Both exceptions are reachable only through audited `security definer` functions
-(`admin_set_role`, `admin_set_partner_approval`) that check `is_admin()` first.
+Those columns are reachable only through audited `security definer` functions:
+`admin_set_role`, `admin_set_partner_canteen` (admin only), and
+`canteen_set_partner_active`, which lets a canteen retire its own departed staff and
+cannot reach another canteen's partners.
 
 ## 6. Order lifecycle
 
@@ -166,8 +171,11 @@ Decisions baked in:
 
 - **`out_for_delivery` was removed.** On a walkable campus it is the same physical moment
   as pickup. One tap, not two. Students see `picked_up` as "On the way".
-- **Assignment is a pull, not a push.** `ready` orders are a pool; the first partner to
-  claim wins. No dispatcher, no assignment algorithm, no orphaned pushes.
+- **Assignment is a pull, but canteen-scoped** (ADR 008). External couriers cannot enter
+  campus, so each canteen employs its own delivery staff. A partner claims from their own
+  canteen's ready queue; there is no campus-wide pool.
+- **A canteen can deliver its own order** (`ready → delivered`) when no partner is on
+  shift, so a small canteen is never stuck waiting for someone who went home.
 - **Students cancel only while `pending`.** Once a canteen accepts, the kitchen has
   committed. Later cancellation is an admin action with a refund.
 - **Every transition writes `order_status_history`** (from, to, actor, timestamp). Support
@@ -184,6 +192,18 @@ Decisions baked in:
 | Student cancels as canteen accepts          | Both are conditional updates on `status='pending'`; one wins                   |
 | Payment succeeds, app disconnects           | Razorpay webhook is the source of truth, not the client callback               |
 | Price changes between browsing and checkout | Server re-reads prices; `order_items` snapshots what was charged               |
+
+### Who gets the money
+
+| Party    | Receives                                                   |
+| -------- | ---------------------------------------------------------- |
+| Canteen  | 100% of the food subtotal, plus ₹8 of the ₹10 delivery fee |
+| Platform | `orders.platform_fee_paise` — ₹2 of the delivery fee       |
+| Partner  | Paid by their canteen, out of the canteen's share          |
+
+We take nothing on food, deliberately: canteens need to profit first for the platform to
+be adopted. The split lives in `platform_settings` and is snapshotted onto each order, so
+changing it never rewrites past settlements. See ADR 008.
 
 ## 7. Payment lifecycle
 
@@ -226,7 +246,8 @@ in-app text and the future push text cannot drift, and fixing a typo does not re
 rewriting history.
 
 Partners are notified only about an order they already hold; unclaimed work is discovered
-by querying `delivery_pool`, so a ready order does not fan out a row per online partner.
+by querying their own canteen's ready queue, so a ready order does not fan out a row per
+partner on shift.
 
 ## 9. Real-time architecture
 
@@ -259,15 +280,16 @@ One campus does not need staging infrastructure beyond a second Supabase project
 
 Each has an ADR in [`docs/decisions/`](./decisions/):
 
-| #   | Decision                                                       |
-| --- | -------------------------------------------------------------- |
-| 1   | Expo (React Native) for one mobile codebase, three roles       |
-| 2   | Supabase as the backend; Postgres functions for business logic |
-| 3   | Postgres, money as integer paise, snapshots for history        |
-| 4   | TanStack Query for server state, Zustand for the cart          |
-| 5   | Order state machine: transition table, pull-based assignment   |
-| 6   | Payments: COD first, Razorpay behind a verified-webhook seam   |
-| 7   | Database tests run on in-process Postgres (PGlite), no Docker  |
+| #   | Decision                                                             |
+| --- | -------------------------------------------------------------------- |
+| 1   | Expo (React Native) for one mobile codebase, three roles             |
+| 2   | Supabase as the backend; Postgres functions for business logic       |
+| 3   | Postgres, money as integer paise, snapshots for history              |
+| 4   | TanStack Query for server state, Zustand for the cart                |
+| 5   | Order state machine: transition table, pull-based assignment         |
+| 6   | Payments: COD first, Razorpay behind a verified-webhook seam         |
+| 7   | Database tests run on in-process Postgres (PGlite), no Docker        |
+| 8   | Delivery is canteen-scoped; platform revenue is a delivery-fee slice |
 
 ## 12. What we deliberately are not building
 

@@ -11,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc -b --pretty",
+    "typecheck": "tsc -b --pretty && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -23,17 +23,21 @@
     "db:reset": "supabase db reset",
     "db:seed:users": "node supabase/seed-users.mjs",
     "db:push": "supabase db push",
-    "db:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
-    "db:lint": "supabase db lint --level warning"
+    "db:types": "node scripts/gen-types.mjs",
+    "db:lint": "supabase db lint --level warning",
+    "dev:mobile": "npm run start --workspace @campuseats/mobile",
+    "dev:admin": "npm run dev --workspace @campuseats/admin"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@eslint/js": "^9.39.0",
+    "@types/node": "^24.9.1",
     "eslint": "^9.39.0",
     "prettier": "^3.6.2",
+    "supabase": "^2.117.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
-    "vitest": "^3.2.4",
-    "supabase": "^2.117.0"
+    "vitest": "^3.2.4"
   }
 }

@@ -12,3 +12,8 @@ coverage/
 Thumbs.db
 supabase/.temp/
 supabase/.branches/
+supabase/dist/
+apps/mobile/dist/
+apps/mobile/.expo/
+apps/admin/.next/
+apps/admin/next-env.d.ts

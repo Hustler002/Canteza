@@ -48,35 +48,40 @@ export type Db = PGlite & {
 };
 
 export async function createTestDb(): Promise<Db> {
-  const db = (await PGlite.create()) as Db;
+  const pg = await PGlite.create();
 
-  await db.exec(AUTH_SHIM);
+  await pg.exec(AUTH_SHIM);
 
   for (const file of readdirSync(MIGRATIONS)
     .filter((f) => f.endsWith('.sql'))
     .sort()) {
     try {
-      await db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
+      await pg.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
     } catch (err) {
       throw new Error(`migration ${file} failed: ${(err as Error).message}`);
     }
   }
 
-  db.asUser = async (id: string) => {
-    await db.exec(`reset role; set request.jwt.claim.sub = '${id}'; set role authenticated;`);
+  const asOwner = async (): Promise<void> => {
+    await pg.exec(`reset role;`);
+    await pg.query(`select set_config('request.jwt.claim.sub', '', false)`);
   };
-  db.asOwner = async () => {
-    await db.exec(`reset role; set request.jwt.claim.sub = '';`);
+
+  const asUser = async (id: string): Promise<void> => {
+    await pg.exec(`reset role;`);
+    await pg.query(`select set_config('request.jwt.claim.sub', $1, false)`, [id]);
+    await pg.exec(`set role authenticated;`);
   };
-  db.createUser = async (email, role = 'student', fullName = email) => {
-    await db.asOwner();
-    const { rows } = await db.query<{ id: string }>(
+
+  const createUser = async (email: string, role = 'student', fullName = email): Promise<string> => {
+    await asOwner();
+    const { rows } = await pg.query<{ id: string }>(
       `insert into auth.users (email) values ($1) returning id`,
       [email],
     );
     const id = rows[0]!.id;
     // The on-auth-user-created trigger already inserted the profile.
-    await db.query(`update public.profiles set role = $2, full_name = $3 where id = $1`, [
+    await pg.query(`update public.profiles set role = $2, full_name = $3 where id = $1`, [
       id,
       role,
       fullName,
@@ -84,7 +89,9 @@ export async function createTestDb(): Promise<Db> {
     return id;
   };
 
-  return db;
+  // Object.assign rather than a cast: the cast was unsound, because the methods do
+  // not exist on the value at the moment it claims to be a Db.
+  return Object.assign(pg, { asUser, asOwner, createUser });
 }
 
 const SEED = fileURLToPath(new URL('../seed.sql', import.meta.url));
@@ -94,11 +101,16 @@ export type Campus = {
   otherStudent: string;
   staff: string;
   otherStaff: string;
+  /** Delivers for Main Canteen. */
   partner: string;
+  /** Also delivers for Main Canteen -- the one who loses the claim race. */
   otherPartner: string;
+  /** Delivers for Juice Corner. Must never see a Main Canteen order. */
+  juicePartner: string;
   admin: string;
   mainCanteen: string;
   juiceCorner: string;
+  hostelCanteen: string;
   hostel: string;
 };
 
@@ -114,6 +126,7 @@ export async function seedCampus(db: Db): Promise<Campus> {
   await db.exec(`update public.canteens set opens_at = '00:00', closes_at = '00:00';`);
 
   const mainCanteen = 'c0000000-0000-4000-8000-000000000001';
+  const hostelCanteen = 'c0000000-0000-4000-8000-000000000002';
   const juiceCorner = 'c0000000-0000-4000-8000-000000000004';
 
   const cast = {
@@ -123,9 +136,11 @@ export async function seedCampus(db: Db): Promise<Campus> {
     otherStaff: await db.createUser('juice@campus.edu', 'canteen', 'Juice Corner Counter'),
     partner: await db.createUser('vikram@campus.edu', 'delivery', 'Vikram Singh'),
     otherPartner: await db.createUser('imran@campus.edu', 'delivery', 'Imran Qureshi'),
+    juicePartner: await db.createUser('sana@campus.edu', 'delivery', 'Sana Khan'),
     admin: await db.createUser('admin@campus.edu', 'admin', 'Platform Admin'),
     mainCanteen,
     juiceCorner,
+    hostelCanteen,
     hostel: 'a0000000-0000-4000-8000-000000000001',
   };
 
@@ -137,10 +152,11 @@ export async function seedCampus(db: Db): Promise<Campus> {
     juiceCorner,
     cast.otherStaff,
   ]);
+  // Partners belong to a canteen (ADR 008): two at Main, one at Juice Corner.
   await db.query(
-    `insert into public.delivery_partners (profile_id, is_approved, is_online)
-     values ($1, true, true), ($2, true, true)`,
-    [cast.partner, cast.otherPartner],
+    `insert into public.delivery_partners (profile_id, canteen_id, is_approved, is_online)
+     values ($1, $4, true, true), ($2, $4, true, true), ($3, $5, true, true)`,
+    [cast.partner, cast.otherPartner, cast.juicePartner, mainCanteen, juiceCorner],
   );
 
   return cast;
