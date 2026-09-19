@@ -28,8 +28,9 @@ rules, and they are the part that must be right.
 
 ## Phase 2 — database ✅
 
-Three migrations plus seed data, all executed by 65 tests running on in-process Postgres
-(ADR 007 — no Docker needed).
+Three migrations plus seed data, all executed on in-process Postgres (ADR 007 — no
+Docker needed). Later phases added three more migrations; the SQL suite stands at 115
+tests.
 
 - `..._schema.sql` — 19 tables, indexes, the `canteens_public` view, and
   `order_transitions`: the state machine stored as data so a test can diff it against

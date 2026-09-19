@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 5 complete.** The full order path now runs student -> canteen -> partner: 181 tests green.
+**Phase 5 complete.** The full order path now runs student -> canteen -> partner: 193 tests green.
 **Phase 6 (admin dashboard) is next.**
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
@@ -17,7 +17,7 @@
 ```
 ✅ Phase 0  assessment, architecture, ADRs
 ✅ Phase 1  monorepo, tooling, shared domain core + 33 tests
-✅ Phase 2  schema, RLS, RPC functions, seed data + 95 tests (ADR 008 rework + audit)
+✅ Phase 2  schema, RLS, RPC functions, seed data + 107 tests (ADR 008 rework + audit)
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
@@ -38,7 +38,7 @@ vitest.config.ts        packages/**/test, apps/**/test, supabase/test
 supabase/tsconfig.json  so `npm run typecheck` actually covers the database tests
 .env.example            SUPABASE_URL / ANON_KEY / SERVICE_ROLE_KEY
 docs/architecture.md    the living architecture document
-docs/decisions/         ADRs 001–007
+docs/decisions/         ADRs 001–008
 packages/shared/        the domain core
 supabase/               migrations, seed, RPC functions, database tests
 ```
@@ -94,7 +94,7 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `..._harden_default_privileges.sql` | **Security.** Revokes Supabase's blanket grants, restates the real ones |
 | `seed.sql`                          | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
 | `seed-users.mjs`                    | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                             | 95 tests on in-process Postgres — see `test/README.md`                  |
+| `test/`                             | 115 tests on in-process Postgres — see `test/README.md`                 |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
