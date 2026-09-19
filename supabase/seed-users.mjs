@@ -52,34 +52,52 @@ const HOSTELS = {
 };
 
 const PEOPLE = [
-  { key: 'riya', email: 'riya@campus.edu', name: 'Riya Sharma', role: 'student' },
-  { key: 'arjun', email: 'arjun@campus.edu', name: 'Arjun Nair', role: 'student' },
-  { key: 'meera', email: 'meera@campus.edu', name: 'Meera Iyer', role: 'student' },
+  {
+    key: 'riya',
+    email: 'riya@campus.edu',
+    name: 'Riya Sharma',
+    role: 'student',
+    home: { hostel: HOSTELS.aryabhatta, block: 'A', room: '214' },
+  },
+  {
+    key: 'arjun',
+    email: 'arjun@campus.edu',
+    name: 'Arjun Nair',
+    role: 'student',
+    home: { hostel: HOSTELS.aryabhatta, block: 'B', room: '112' },
+  },
+  {
+    key: 'meera',
+    email: 'meera@campus.edu',
+    name: 'Meera Iyer',
+    role: 'student',
+    home: { hostel: HOSTELS.ramanujan, block: 'A', room: '045' },
+  },
   {
     key: 'mainStaff',
     email: 'main.canteen@campus.edu',
-    name: 'Main Canteen',
+    name: 'Main Canteen Counter',
     role: 'canteen',
     canteen: CANTEENS.main,
   },
   {
     key: 'hostelStaff',
     email: 'hostel.canteen@campus.edu',
-    name: 'Hostel Canteen',
+    name: 'Hostel Canteen Counter',
     role: 'canteen',
     canteen: CANTEENS.hostel,
   },
   {
     key: 'nightStaff',
     email: 'night.canteen@campus.edu',
-    name: 'Night Canteen',
+    name: 'Night Canteen Counter',
     role: 'canteen',
     canteen: CANTEENS.night,
   },
   {
     key: 'juiceStaff',
     email: 'juice.corner@campus.edu',
-    name: 'Juice Corner',
+    name: 'Juice Corner Counter',
     role: 'canteen',
     canteen: CANTEENS.juice,
   },
@@ -89,6 +107,10 @@ const PEOPLE = [
     name: 'Vikram Singh',
     role: 'delivery',
     approved: true,
+    // Delivery is canteen-scoped (ADR 008): a partner belongs to one canteen, and
+    // delivery_partners.canteen_id is NOT NULL. Both sit at Main Canteen, matching
+    // seedCampus in the test harness so the demo campus and the fixtures agree.
+    canteen: CANTEENS.main,
   },
   {
     key: 'imran',
@@ -96,6 +118,10 @@ const PEOPLE = [
     name: 'Imran Qureshi',
     role: 'delivery',
     approved: true,
+    // Delivery is canteen-scoped (ADR 008): a partner belongs to one canteen, and
+    // delivery_partners.canteen_id is NOT NULL. Both sit at Main Canteen, matching
+    // seedCampus in the test harness so the demo campus and the fixtures agree.
+    canteen: CANTEENS.main,
   },
   { key: 'admin', email: 'admin@campus.edu', name: 'Platform Admin', role: 'admin' },
 ];
@@ -184,10 +210,51 @@ async function main() {
         },
       });
     }
+    // A student's saved delivery address, as "Remember this address" at checkout writes
+    // it. All-or-nothing by constraint, and it is only a default -- each order still
+    // snapshots where it actually went.
+    if (person.role === 'student' && person.home) {
+      await api(`/rest/v1/profiles?id=eq.${ids[person.key]}`, {
+        method: 'PATCH',
+        body: {
+          default_hostel_id: person.home.hostel,
+          default_block: person.home.block,
+          default_room: person.home.room,
+        },
+      });
+    }
+
     const where = person.canteen ? ` @ ${CANTEEN_NAMES[person.canteen]}` : '';
     console.log(`  ${person.email.padEnd(26)} ${person.role}${where}`);
   }
 
+  // place_order refuses a closed canteen, and the seeded hours are real ones -- Main
+  // Canteen shuts at 22:00 IST. A seeder that only works during the day is a seeder that
+  // fails at night, the same reason seedCampus forces 24 hours in the test harness. Open
+  // them for the duration, then put the real hours back.
+  const savedHours = await api('/rest/v1/canteens?select=id,opens_at,closes_at');
+  const setHours = async (rows) => {
+    for (const row of rows) {
+      await api(`/rest/v1/canteens?id=eq.${row.id}`, {
+        method: 'PATCH',
+        body: { opens_at: row.opens_at, closes_at: row.closes_at },
+      });
+    }
+  };
+  await setHours(savedHours.map((row) => ({ ...row, opens_at: '00:00', closes_at: '00:00' })));
+
+  try {
+    await placeDemoOrders(ids);
+  } finally {
+    // Restore even if a demo order failed, so the project is never left permanently open.
+    await setHours(savedHours);
+  }
+
+  console.log(`\nDone. Every account's password is "${PASSWORD}".`);
+}
+
+/** `ids` maps each seeded person key to their profile id, built in main(). */
+async function placeDemoOrders(ids) {
   console.log('\nPlacing demo orders through the real RPCs…');
   const maggi = await itemId(CANTEENS.main, 'Masala Maggi');
   const coffee = await itemId(CANTEENS.main, 'Cold Coffee');
@@ -201,6 +268,27 @@ async function main() {
   const mainStaff = await signIn('main.canteen@campus.edu');
   const hostelStaff = await signIn('hostel.canteen@campus.edu');
   const vikram = await signIn('vikram@campus.edu');
+
+  /**
+   * Walk an order along a path, skipping anything it has already done.
+   *
+   * `place_order` is idempotent, so a second run gets the *same* order back -- already
+   * delivered. Replaying the transitions then failed with "INVALID_TRANSITION: delivered
+   * -> accepted", which made this script a one-shot despite CLAUDE.md telling people to
+   * re-run it. Finding where the order already sits on its own path fixes that, and also
+   * repairs a run that died halfway.
+   *
+   * `claim_delivery` is not a transition_order call, so it is named in the path and
+   * dispatched separately.
+   */
+  const drive = async (orderId, path) => {
+    const [order] = await api(`/rest/v1/orders?id=eq.${orderId}&select=status`);
+    const reached = path.findIndex((step) => step.status === order.status);
+    for (const step of path.slice(reached + 1)) {
+      if (step.claim) await rpc(step.token, 'claim_delivery', { p_order_id: orderId });
+      else await rpc(step.token, 'transition_order', { p_order_id: orderId, p_to: step.status });
+    }
+  };
 
   const place = (token, args) =>
     rpc(token, 'place_order', {
@@ -226,15 +314,21 @@ async function main() {
     key: 'demo-delivered',
     note: 'Less spicy please',
   });
-  for (const to of ['accepted', 'preparing', 'ready']) {
-    await rpc(mainStaff, 'transition_order', { p_order_id: done, p_to: to });
-  }
-  await rpc(vikram, 'claim_delivery', { p_order_id: done });
-  await rpc(vikram, 'transition_order', { p_order_id: done, p_to: 'picked_up' });
-  await rpc(vikram, 'transition_order', { p_order_id: done, p_to: 'delivered' });
-  await api('/rest/v1/reviews', {
+  await drive(done, [
+    { status: 'pending' },
+    { status: 'accepted', token: mainStaff },
+    { status: 'preparing', token: mainStaff },
+    { status: 'ready', token: mainStaff },
+    { status: 'assigned', token: vikram, claim: true },
+    { status: 'picked_up', token: vikram },
+    { status: 'delivered', token: vikram },
+  ]);
+  // One review per order (reviews_order_id_key). `resolution=ignore-duplicates` only
+  // applies when the conflict target is named, so a re-run needs `on_conflict` too.
+  await api('/rest/v1/reviews?on_conflict=order_id', {
     token: riya,
     method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates' },
     body: {
       order_id: done,
       student_id: ids.riya,
@@ -254,9 +348,12 @@ async function main() {
     block: 'B',
     room: '112',
   });
-  for (const to of ['accepted', 'preparing', 'ready']) {
-    await rpc(mainStaff, 'transition_order', { p_order_id: ready, p_to: to });
-  }
+  await drive(ready, [
+    { status: 'pending' },
+    { status: 'accepted', token: mainStaff },
+    { status: 'preparing', token: mainStaff },
+    { status: 'ready', token: mainStaff },
+  ]);
   console.log('  ready, waiting in the pool');
 
   // 3. Mid-preparation, so the student app has a live tracker.
@@ -268,8 +365,11 @@ async function main() {
     block: 'A',
     room: '045',
   });
-  await rpc(hostelStaff, 'transition_order', { p_order_id: preparing, p_to: 'accepted' });
-  await rpc(hostelStaff, 'transition_order', { p_order_id: preparing, p_to: 'preparing' });
+  await drive(preparing, [
+    { status: 'pending' },
+    { status: 'accepted', token: hostelStaff },
+    { status: 'preparing', token: hostelStaff },
+  ]);
   console.log('  preparing');
 
   // 4. Brand new, so the canteen app has something to accept or reject.
@@ -279,8 +379,6 @@ async function main() {
     key: 'demo-pending',
   });
   console.log('  pending, waiting for the canteen');
-
-  console.log(`\nDone. Every account's password is "${PASSWORD}".`);
 }
 
 main().catch((err) => {

@@ -50,11 +50,13 @@ export default async function DashboardPage() {
       </section>
 
       <section className="card">
-        <h2>Next</h2>
+        <h2>Where to go</h2>
         <p className="muted">
-          <Link href="/orders">Orders</Link> is live: search, filter and the full status trail.
-          Still to come in Phase 6 — canteens, delivery staff, students and hostels, and the
-          analytics breakdown. The data and the permissions for all of it already exist.
+          <Link href="/orders">Orders</Link> searches every order and shows its status trail.{' '}
+          <Link href="/canteens">Canteens</Link> creates and edits them, and is where counter and
+          delivery staff are attached. <Link href="/students">Accounts</Link> changes a role or
+          suspends one, <Link href="/hostels">Hostels</Link> manages the buildings, and{' '}
+          <Link href="/analytics">Analytics</Link> breaks revenue down by canteen.
         </p>
       </section>
     </>

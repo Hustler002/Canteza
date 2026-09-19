@@ -8,8 +8,9 @@
 
 ## Where the project is right now
 
-**Phase 6 complete.** The admin dashboard covers orders, canteens, counter and delivery
-staff, accounts, hostels and revenue: 294 tests green.
+**Phase 6 complete, verified end to end against a real Supabase — including every admin
+page in a browser.** 299 tests green offline, plus 34/34 live checks
+(`npm run verify:live`) covering auth, realtime, the full order path and RLS.
 **Phase 7 (ratings, favourites, coupons, complaints) is next.**
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
@@ -22,7 +23,7 @@ staff, accounts, hostels and revenue: 294 tests green.
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
-✅ Phase 6  admin: orders, canteens, staff, accounts, hostels, revenue + 95
+✅ Phase 6  admin: orders, canteens, staff, accounts, hostels, revenue + 99
 ⬜ Phase 7  ratings, favourites, reorder, coupons, complaints          ← NEXT
 ⬜ Phase 8  push, Razorpay, Sentry, deploy
 ```
@@ -49,6 +50,7 @@ apps/mobile/            Expo + expo-router. Student / Canteen / Delivery
 apps/admin/             Next.js 16 App Router (src/proxy.ts, not middleware.ts)
 packages/api/           Typed data access: client, auth, error mapping, query keys
 scripts/gen-types.mjs   Generates database.types.ts from the migrations, no Docker
+scripts/verify-live.mjs Live checks against a real project, anon key only
 ```
 
 ### `packages/shared` — the domain core
@@ -84,25 +86,26 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 ### `supabase/` — the database
 
-| File                                 | Holds                                                                   |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| `..._schema.sql`                     | 19 tables, indexes, `canteens_public` view, `order_transitions` table   |
-| composite FK                         | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`       |
-| `..._rls.sql`                        | RLS helpers, policies, column-level grants, realtime                    |
-| `..._functions.sql`                  | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
-| `..._student_default_address.sql`    | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
-| `..._delivery_shift_toggle.sql`      | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
-| `..._harden_default_privileges.sql`  | **Security.** Revokes Supabase's blanket grants, restates the real ones |
-| `..._admin_set_partner_active.sql`   | Admin ends or restores a delivery posting; canteen id is explicit       |
-| `..._canteen_column_grants.sql`      | **Security.** Staff write hours + pause only; admin writes via RPC      |
-| `..._canteen_create.sql`             | `admin_create_canteen`; canteens lose client INSERT and DELETE          |
-| `..._canteen_staff_attach.sql`       | Attach/detach staff; writes the role with the row. RPC-only table       |
-| `..._delivery_partner_guards.sql`    | Onboarding works on a disabled canteen; refuses counter staff           |
-| `..._profiles_and_hostels_admin.sql` | `admin_set_profile_active`; no self-demotion; hostels lose DELETE       |
-| `..._revenue_view.sql`               | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it         |
-| `seed.sql`                           | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
-| `seed-users.mjs`                     | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                              | 172 tests on in-process Postgres — see `test/README.md`                 |
+| File                                 | Holds                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| `..._schema.sql`                     | 19 tables, indexes, `canteens_public` view, `order_transitions` table    |
+| composite FK                         | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`        |
+| `..._rls.sql`                        | RLS helpers, policies, column-level grants, realtime                     |
+| `..._functions.sql`                  | `place_order`, `transition_order`, `claim_delivery`, `release_delivery`  |
+| `..._student_default_address.sql`    | `profiles.default_hostel_id/block/room`, all-or-nothing                  |
+| `..._delivery_shift_toggle.sql`      | `is_online` gates the queue and claiming; `OFF_SHIFT` error              |
+| `..._harden_default_privileges.sql`  | **Security.** Revokes Supabase's blanket grants, restates the real ones  |
+| `..._admin_set_partner_active.sql`   | Admin ends or restores a delivery posting; canteen id is explicit        |
+| `..._canteen_column_grants.sql`      | **Security.** Staff write hours + pause only; admin writes via RPC       |
+| `..._canteen_create.sql`             | `admin_create_canteen`; canteens lose client INSERT and DELETE           |
+| `..._canteen_staff_attach.sql`       | Attach/detach staff; writes the role with the row. RPC-only table        |
+| `..._delivery_partner_guards.sql`    | Onboarding works on a disabled canteen; refuses counter staff            |
+| `..._profiles_and_hostels_admin.sql` | `admin_set_profile_active`; no self-demotion; hostels lose DELETE        |
+| `..._revenue_view.sql`               | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it          |
+| `..._service_role_grants.sql`        | **Security.** States what service_role may do; nothing granted it before |
+| `seed.sql`                           | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings       |
+| `seed-users.mjs`                     | Accounts via the Auth API, then demo orders through the real RPCs        |
+| `test/`                              | 173 tests on in-process Postgres — see `test/README.md`                  |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -134,6 +137,7 @@ npm run db:start       # supabase start          (needs Docker)
 npm run db:reset       # re-apply migrations + seed.sql
 npm run db:seed:users  # demo accounts + demo orders (needs a running Supabase)
 npm run db:types       # regenerate database.types.ts from the migrations (no Docker)
+npm run verify:live    # 34 checks on the live project: auth, realtime, order path, RLS
 npm run dev:mobile     # expo start
 npm run dev:admin      # next dev
 npm run db:push        # deploy migrations to the linked project
@@ -221,15 +225,10 @@ Departures from the original brief, all argued in the ADRs:
   it needs a scheduled job and lands with Razorpay in Phase 8.
 - **Coupon funding is undecided** — a discount currently comes out of the canteen's share
   even when an admin issued the code. Decide before Phase 7 ships coupons (ADR 008).
-- **Nothing has run against a real Supabase yet.** Auth, Realtime and PostgREST are
-  exercised only through generated types and the SQL tests. See "Verifying against a
-  real database" below — it needs no Docker.
-- **The admin Orders pages have never rendered a real row.** The routing, the redirect,
-  the stylesheet at 375/768/desktop and every pure function behind them are verified;
-  what is not is a PostgREST response — the `profiles!orders_student_id_fkey` embed, the
-  `or=(...)` search actually matching, and the date bounds landing on the right campus
-  day. Those need a database. First person with one: sign in as admin@campus.edu, search
-  `1042`, filter by status and by date, and open an order.
+- **The mobile app has never run against the live project.** Every admin page has now
+  been driven in a browser against real data, but `apps/mobile` has only ever been
+  bundled, not run — no student has placed an order from a device, and the realtime
+  tracker has only been proven from Node. That needs Expo on a phone or simulator.
 - PGlite is single-connection, so the race tests verify the **guard** sequentially (A claims,
   B is refused) rather than firing two transactions in parallel. The atomicity is Postgres's
   own, but when Docker is available, re-run the claim scenario against `supabase start` with
@@ -260,6 +259,58 @@ claims, but never touches an order already in hand. `orders` matches those by
 way, so going off shift cannot strand food someone is carrying.
 
 ## Verifying against a real database
+
+**This has been done.** A hosted project is linked by `.env` (gitignored), the schema and
+seed are pushed, and `npm run verify:live` passes 34/34. Re-run it after any migration.
+
+`scripts/verify-live.mjs` uses the **anon key and real sign-ins only** — never the service
+role key, because a script that can bypass RLS cannot test it. That is the difference from
+`seed-users.mjs`, which is server-side and does bypass it.
+
+Four defects were only ever findable this way, all fixed:
+
+1. **`service_role` had no privileges on any of our tables.** Every server-side call
+   returned 42501. `harden_default_privileges.sql` said service_role was "left alone on
+   purpose" — but left alone meant never granted, and Supabase's bootstrap grants do not
+   reach tables a later `db push` creates. The PGlite harness had been _modelling_ a
+   default grant that does not exist, so the suite was green while the platform was
+   broken. Fixed in `..._service_role_grants.sql`; the harness no longer pretends, and
+   `privileges.test.ts` pins it.
+2. **`seed-users.mjs` created delivery partners with no canteen.** Stale since ADR 008
+   made delivery canteen-scoped; `delivery_partners.canteen_id` is NOT NULL. The harness
+   never exercised this file, so nothing caught it.
+3. **The seeder could only run between 08:00 and 22:00 IST**, because `place_order`
+   refuses a closed canteen and `seed.sql` sets real hours. It now opens the canteens for
+   the duration and restores them in a `finally`, the same trick `seedCampus` uses.
+4. **A realtime race, in the verification script itself.** `SUBSCRIBED` means the channel
+   joined, not that the `postgres_changes` filter is registered with the replication
+   worker. An INSERT in that gap is never delivered, which looks exactly like a broken
+   publication. The script now settles before acting.
+
+### What the browser pass added
+
+Driving all seven admin pages against live data closed the last unverified claims, and
+found two more defects that no offline test could reach:
+
+5. **`seed-users.mjs` was not re-runnable.** `place_order` is idempotent and hands back
+   the _existing_ order, so a second run replayed transitions against an already-delivered
+   order and died on `INVALID_TRANSITION: delivered -> accepted`. It now finds where each
+   order already sits on its own path and only walks the remainder, which also repairs a
+   run that failed halfway. The review insert needed `on_conflict=order_id` for the same
+   reason.
+6. **The overview's "Next" card still advertised Phase 6 as unbuilt**, months of work
+   after the fact. Replaced with a short guide to where each page is.
+
+Proven in the browser rather than reasoned about: the `profiles!orders_student_id_fkey`
+embed and the `profiles`/`hostels` embeds all resolve; the `or=(...)` search matches on
+both `code` and `room` and survives a `#` through URL encoding; `is_within_hours` reports
+Night Canteen open at 00:05 IST while every other canteen reads closed; and the campus day
+boundary is right where it matters — an order backdated to 00:30 IST on the 20th
+(19:00 UTC on the 19th) is excluded from the 19th and included in the 20th, the opposite
+of what a naive UTC cutoff gives. `apps/admin/test/order-filters.test.ts` now pins that
+case as a regression test.
+
+### First-time setup
 
 `supabase start` needs Docker, which this machine does not have — but **`supabase db
 push` does not** (it fails with a connection error, not `LegacyDockerRunError`, unlike
@@ -402,11 +453,10 @@ screen. **Settle the coupon-funding question first** (see Known gaps and ADR 008
 analytics page reports discounts as their own figure precisely because it is undecided,
 and shipping coupons will force the answer.
 
-**Still unverified anywhere:** nothing has run against a real Supabase. Realtime,
-Auth and PostgREST are exercised only by types and the SQL tests — all of it needs
-Docker. The first person with it should run `npm run db:reset && npm run db:seed:users`,
-then sign in as riya@campus.edu / campus1234, place an order, and watch it appear on
-main.canteen@campus.edu and then vikram@campus.edu.
+**Still unverified:** `apps/mobile`. The database, the API layer and the whole admin
+dashboard are proven against the live project; the Expo app is not. Run
+`npm run dev:mobile` with `EXPO_PUBLIC_SUPABASE_*` set, sign in as riya@campus.edu /
+campus1234, place an order, and watch it reach main.canteen@campus.edu and vikram@campus.edu.
 
 Keep `npm run verify` green, then update this file and `docs/roadmap.md`. **Do not
 commit** — leave the work staged for review.

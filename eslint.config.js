@@ -24,6 +24,8 @@ export default tseslint.config(
         console: 'readonly',
         fetch: 'readonly',
         URL: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
     rules: { 'no-console': 'off' },

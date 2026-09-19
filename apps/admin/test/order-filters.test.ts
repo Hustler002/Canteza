@@ -89,6 +89,21 @@ describe('campus day bounds', () => {
   it('handles a leap day', () => {
     expect(campusDayEnd('2028-02-28')).toBe('2028-02-29T00:00:00+05:30');
   });
+
+  it('puts a small-hours order on the campus day, not the UTC one', () => {
+    // 19:00Z on the 19th is 00:30 IST on the 20th: campus day 20, UTC day 19 -- the one
+    // window where the two disagree, and the reason the offset exists. Verified against
+    // the live project by backdating a real order into it; this pins the semantics
+    // rather than the string, so a naive UTC midnight fails here instead of in PostgREST.
+    const smallHours = new Date('2026-09-19T19:00:00Z');
+    expect(new Date(campusDayEnd('2026-09-19')).getTime()).toBeLessThanOrEqual(
+      smallHours.getTime(),
+    );
+    expect(new Date(campusDayStart('2026-09-20')).getTime()).toBeLessThanOrEqual(
+      smallHours.getTime(),
+    );
+    expect(new Date(campusDayEnd('2026-09-20')).getTime()).toBeGreaterThan(smallHours.getTime());
+  });
 });
 
 describe('campus day arithmetic', () => {

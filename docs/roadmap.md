@@ -194,3 +194,37 @@ Ratings, favourites, reorder, coupons, support tickets, analytics charts.
 
 Expo push (schema and content already exist from Phase 2), Razorpay verification function,
 Sentry, EAS build profiles, Vercel deploy, CI running `npm run verify` plus SQL tests.
+
+---
+
+## Verified against a real Supabase
+
+Phases 1–6 were built and tested entirely on PGlite. The stack has now run on a hosted
+project: schema and seed pushed, accounts created, and `npm run verify:live` passing 34/34
+— auth, realtime, the full student → canteen → partner → delivered path, and the RLS
+boundaries, all through the anon key with real sign-ins.
+
+Four defects surfaced that no offline suite could have caught, and the most important one
+is a lesson about the harness rather than the schema: the PGlite shim was granting
+`service_role` privileges that a real project never gives to tables created by a later
+`db push`. The suite was green while every server-side call on a live project failed with 42501. A test harness that models a platform default generously is a harness that lies.
+The grants are now stated explicitly in a migration, and the shim models reality.
+
+### The admin UI, driven against live data
+
+Every Phase 6 page was then walked in a browser against the hosted project — not only the
+API layer beneath them. Orders search and filters, canteen edit and disable, counter staff
+attach/detach (with the role flipping to `canteen` and back to `student`), delivery
+onboard/transfer/retire/restore, account suspend/restore, hostel blocks, and the revenue
+breakdown, at 375px and desktop.
+
+Three things it confirmed that had only been argued on paper: `is_within_hours` marks
+Night Canteen open at 00:05 IST while the rest read closed; a transfer keeps the retired
+posting so a delivered order still resolves its partner through the composite foreign key;
+and the campus date boundary excludes an order placed at 00:30 IST from the previous day,
+which a UTC cutoff would not.
+
+It also caught two defects: `seed-users.mjs` could only ever be run once, because
+`place_order`'s idempotency returns the existing order and the script then replayed its
+transitions; and the overview page still described Phase 6 as unbuilt. Both fixed, and the
+seeder now proves itself by running twice in a row.

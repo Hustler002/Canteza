@@ -26,7 +26,8 @@
     "db:types": "node scripts/gen-types.mjs",
     "db:lint": "supabase db lint --level warning",
     "dev:mobile": "npm run start --workspace @canteza/mobile",
-    "dev:admin": "npm run dev --workspace @canteza/admin"
+    "dev:admin": "npm run dev --workspace @canteza/admin",
+    "verify:live": "node --env-file=.env scripts/verify-live.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

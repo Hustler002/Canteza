@@ -37,13 +37,20 @@ const AUTH_SHIM = `
   create role authenticated;
   create role service_role;
 
-  -- Supabase grants select/insert/update/delete on every table in public to these
-  -- roles by default. Modelling that here is the whole point: without it, PGlite
+  -- Supabase grants select/insert/update/delete on every table in public to anon and
+  -- authenticated by default. Modelling that here is the whole point: without it, PGlite
   -- only ever has the grants our migration writes, so a test suite that passes
   -- proves nothing about a real project.
   -- https://supabase.com/docs/guides/api/securing-your-api
+  --
+  -- service_role is deliberately NOT in this list. It used to be, and that was a
+  -- fiction: on a real project, tables created later by supabase db push inherit
+  -- nothing for service_role, so every server-side call failed with 42501 the first time
+  -- these migrations met a live database. Granting it here made the suite green while
+  -- the platform was broken. The grants service_role actually needs are now written
+  -- explicitly in the service_role_grants migration, and privileges.test.ts pins them.
   alter default privileges in schema public
-    grant select, insert, update, delete on tables to anon, authenticated, service_role;
+    grant select, insert, update, delete on tables to anon, authenticated;
 `;
 
 export type Db = PGlite & {

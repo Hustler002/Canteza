@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getIdentity } from '@canteza/api';
 import { ROLES } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
-import { formatCampusDateTime } from '@/lib/format';
+import { formatAddress, formatCampusDateTime } from '@/lib/format';
 import type { SearchParams } from '@/lib/order-filters';
 import { hasPeopleFilters, parsePeopleFilters } from '@/lib/people-filters';
 import { setProfileActive, setProfileRole } from './actions';
@@ -37,7 +37,11 @@ export default async function StudentsPage({
 
   let query = supabase
     .from('profiles')
-    .select('id, full_name, phone, role, is_active, created_at')
+    // `profiles` has exactly one foreign key into `hostels`, so the embed needs no
+    // constraint hint -- unlike orders, which reaches profiles twice.
+    .select(
+      'id, full_name, phone, role, is_active, created_at, default_block, default_room, hostels(name)',
+    )
     .order('full_name')
     .limit(PAGE_SIZE);
 
@@ -110,6 +114,7 @@ export default async function StudentsPage({
                 <tr>
                   <th>Name</th>
                   <th>Phone</th>
+                  <th>Lives at</th>
                   <th>Joined</th>
                   <th>State</th>
                   <th>Role</th>
@@ -125,6 +130,13 @@ export default async function StudentsPage({
                     <tr key={person.id}>
                       <td>{person.full_name || 'Unnamed account'}</td>
                       <td className="muted">{person.phone ?? '—'}</td>
+                      <td className="muted">
+                        {formatAddress(
+                          person.hostels?.name,
+                          person.default_block,
+                          person.default_room,
+                        )}
+                      </td>
                       <td className="muted">{formatCampusDateTime(person.created_at)}</td>
                       <td>
                         {person.is_active ? (

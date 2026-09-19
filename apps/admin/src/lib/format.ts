@@ -38,3 +38,22 @@ export function statusTone(status: string): 'ok' | 'bad' | '' {
   if (status === 'cancelled' || status === 'rejected') return 'bad';
   return '';
 }
+
+/**
+ * A student's saved delivery address, as one line.
+ *
+ * `profile_default_address_complete` makes these three all-or-nothing in the schema, so
+ * a half-filled address cannot exist -- but the columns are individually nullable and
+ * the generated types say so, and this is a display helper, not a place to assert.
+ *
+ * It is a *default*, not the address of record: an order snapshots where it actually
+ * went, so changing rooms next term never rewrites last month's deliveries.
+ */
+export function formatAddress(
+  hostel: string | null | undefined,
+  block: string | null | undefined,
+  room: string | null | undefined,
+): string {
+  if (!hostel || !block || !room) return '—';
+  return `${hostel} ${block}-${room}`;
+}

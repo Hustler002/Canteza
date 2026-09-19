@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORDER_STATUSES } from '@canteza/shared';
-import { formatCampusDateTime, formatStatus, statusTone } from '../src/lib/format';
+import { formatAddress, formatCampusDateTime, formatStatus, statusTone } from '../src/lib/format';
 
 describe('formatCampusDateTime', () => {
   it('renders an instant on campus time, not the server’s', () => {
@@ -39,5 +39,24 @@ describe('formatStatus', () => {
   it('unshouts the stored value without inventing a label', () => {
     expect(formatStatus('picked_up')).toBe('picked up');
     expect(formatStatus('ready')).toBe('ready');
+  });
+});
+
+describe('formatAddress', () => {
+  it('renders a saved default as one line', () => {
+    expect(formatAddress('Aryabhatta Hostel', 'A', '214')).toBe('Aryabhatta Hostel A-214');
+  });
+
+  it('shows a dash when the student has saved none', () => {
+    // profile_default_address_complete makes these all-or-nothing, but the columns are
+    // each nullable and a display helper is not the place to assert a constraint.
+    expect(formatAddress(null, null, null)).toBe('—');
+    expect(formatAddress(undefined, undefined, undefined)).toBe('—');
+  });
+
+  it('does not render a half address, whichever part is missing', () => {
+    expect(formatAddress('Aryabhatta Hostel', null, '214')).toBe('—');
+    expect(formatAddress('Aryabhatta Hostel', 'A', null)).toBe('—');
+    expect(formatAddress(null, 'A', '214')).toBe('—');
   });
 });

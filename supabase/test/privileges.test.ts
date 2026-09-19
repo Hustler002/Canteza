@@ -119,6 +119,17 @@ describe('what authenticated may write, column by column', () => {
     expect(await hasTablePrivilege('authenticated', 'canteens', 'DELETE')).toBe(false);
   });
 
+  it('gives service_role the access every server-side job needs', async () => {
+    // Not a platform default: nothing grants this unless a migration says so, which is
+    // why seeding failed with 42501 on the first real project. The harness no longer
+    // pretends otherwise, so removing that migration fails here.
+    for (const table of ['profiles', 'orders', 'canteens', 'hostels', 'delivery_partners']) {
+      expect(await hasTablePrivilege('service_role', table, 'SELECT')).toBe(true);
+      expect(await hasTablePrivilege('service_role', table, 'INSERT')).toBe(true);
+      expect(await hasTablePrivilege('service_role', table, 'UPDATE')).toBe(true);
+    }
+  });
+
   it('on hostels: an admin edits them, nobody deletes them', async () => {
     expect(await hasTablePrivilege('authenticated', 'hostels', 'INSERT')).toBe(true);
     expect(await hasTablePrivilege('authenticated', 'hostels', 'UPDATE')).toBe(true);
