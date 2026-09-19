@@ -54,6 +54,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Link href="/">Overview</Link>
         <Link href="/orders">Orders</Link>
         <Link href="/canteens">Canteens</Link>
+        <Link href="/students">Accounts</Link>
+        <Link href="/hostels">Hostels</Link>
+        <Link href="/analytics">Analytics</Link>
       </nav>
 
       {children}

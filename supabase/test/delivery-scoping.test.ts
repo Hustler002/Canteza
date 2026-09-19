@@ -359,3 +359,87 @@ describe('an admin retires a delivery partner', () => {
     ]);
   });
 });
+
+describe('onboarding a delivery partner', () => {
+  const onboard = (profileId: string, canteenId: string) =>
+    db.query(`select public.admin_set_partner_canteen($1::uuid, $2::uuid, true)`, [
+      profileId,
+      canteenId,
+    ]);
+
+  it('works on a canteen that is not enabled yet', async () => {
+    // A canteen is created switched off so its staff and menu can go in first. Counter
+    // staff could always be attached then; delivery staff could not, until now.
+    await db.asUser(campus.admin);
+    const { rows } = await db.query<{ id: string }>(
+      `select public.admin_create_canteen('Partner Staffing Test', '', null, null, 0,
+                                          '09:00'::time, '17:00'::time) as id`,
+    );
+    const fresh = rows[0]!.id;
+
+    await db.asOwner();
+    const state = await db.query<{ is_active: boolean }>(
+      `select is_active from public.canteens where id = $1`,
+      [fresh],
+    );
+    expect(state.rows[0]!.is_active).toBe(false);
+
+    await db.asUser(campus.admin);
+    await onboard(campus.otherStudent, fresh);
+
+    await db.asOwner();
+    const posting = await db.query<{ canteen_id: string; is_approved: boolean }>(
+      `select canteen_id, is_approved from public.delivery_partners
+        where profile_id = $1 and is_active`,
+      [campus.otherStudent],
+    );
+    expect(posting.rows[0]).toEqual({ canteen_id: fresh, is_approved: true });
+  });
+
+  it('refuses someone who works a counter', async () => {
+    // The mirror of admin_attach_canteen_staff's ALREADY_DELIVERY_PARTNER guard. Holding
+    // both rows makes transition_order resolve them as 'canteen' on their own canteen's
+    // orders, so they could claim a delivery and never be able to mark it picked up.
+    await db.asUser(campus.admin);
+    await expectError(() => onboard(campus.staff, campus.mainCanteen), 'ALREADY_CANTEEN_STAFF');
+
+    await db.asOwner();
+    const { rows } = await db.query(
+      `select profile_id from public.delivery_partners where profile_id = $1`,
+      [campus.staff],
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('never demotes an admin put on a roster', async () => {
+    await db.asUser(campus.admin);
+    await onboard(campus.admin, campus.mainCanteen);
+
+    await db.asOwner();
+    const { rows } = await db.query<{ role: string }>(
+      `select role from public.profiles where id = $1`,
+      [campus.admin],
+    );
+    expect(rows[0]!.role).toBe('admin');
+
+    // Clean up so later state stays legible.
+    await db.asUser(campus.admin);
+    await db.query(`select public.admin_set_partner_active($1::uuid, $2::uuid, false)`, [
+      campus.admin,
+      campus.mainCanteen,
+    ]);
+  });
+
+  it('still refuses a canteen that does not exist', async () => {
+    await db.asUser(campus.admin);
+    await expectError(
+      () => onboard(campus.otherStudent, '00000000-0000-4000-8000-00000000dead'),
+      'NOT_FOUND',
+    );
+  });
+
+  it('still refuses a non-admin', async () => {
+    await db.asUser(campus.staff);
+    await expectError(() => onboard(campus.student, campus.mainCanteen), 'FORBIDDEN');
+  });
+});

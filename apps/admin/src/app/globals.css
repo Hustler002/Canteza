@@ -194,6 +194,12 @@ h3 {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--border);
+  /* Five tabs are wider than a phone. Wrapping to a second row keeps every destination
+     visible; scrolling the bar would hide the last ones behind a gesture nobody is told
+     about. min-width lets the bar shrink at all -- as a grid item it otherwise takes its
+     content as its minimum and pushes the page sideways. */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .nav a {
   padding: 10px 14px;

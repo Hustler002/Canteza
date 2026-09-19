@@ -1,4 +1,9 @@
-import { CAMPUS_UTC_OFFSET, ORDER_STATUSES, type OrderStatus } from '@canteza/shared';
+import {
+  CAMPUS_TIMEZONE,
+  CAMPUS_UTC_OFFSET,
+  ORDER_STATUSES,
+  type OrderStatus,
+} from '@canteza/shared';
 
 /**
  * Turns the orders page's URL into something safe to hand PostgREST.
@@ -79,4 +84,30 @@ export function campusDayEnd(date: string): string {
 /** True when any filter is set — lets the page offer a "clear" link only when it helps. */
 export function hasFilters(filters: OrderFilters): boolean {
   return Boolean(filters.q || filters.status || filters.canteenId || filters.from || filters.to);
+}
+
+/**
+ * Today, on campus.
+ *
+ * `toISOString()` would give the UTC date, which is yesterday for the five and a half
+ * hours after midnight IST — exactly the window a late-night canteen trades in. Intl is
+ * asked for the campus zone instead, and `en-CA` because its short date format is
+ * already `yyyy-mm-dd`.
+ */
+const campusDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: CAMPUS_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function campusToday(now = new Date()): string {
+  return campusDate.format(now);
+}
+
+/** Moves a `yyyy-mm-dd` by whole days, staying a `yyyy-mm-dd`. */
+export function shiftDays(date: string, days: number): string {
+  const moved = new Date(`${date}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
 }

@@ -147,3 +147,55 @@ export async function detachStaff(canteenId: string, profileId: string): Promise
   revalidatePath(`/canteens/${canteenId}`);
   redirect(`/canteens/${canteenId}`);
 }
+
+/**
+ * Delivery staff.
+ *
+ * `delivery_partners` has no client INSERT or DELETE grant and only `is_online` is
+ * writable — the partner's own shift toggle. Everything an admin does here is therefore
+ * an RPC, and a retired posting is kept rather than deleted so historical orders still
+ * resolve through the composite foreign key (ADR 008).
+ */
+export async function onboardPartner(canteenId: string, formData: FormData): Promise<void> {
+  const profileId = formData.get('profile_id');
+  if (typeof profileId !== 'string' || !profileId) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent('Pick someone to onboard.')}`);
+  }
+
+  const supabase = await createServerSupabase();
+  // Approved on onboarding: an admin putting someone on a roster *is* the vetting step.
+  // `my_delivery_canteen_id()` requires the flag, so an unapproved row would be a
+  // partner who silently sees no queue.
+  const { error } = await supabase.rpc('admin_set_partner_canteen', {
+    p_profile_id: profileId,
+    p_canteen_id: canteenId,
+    p_approved: true,
+  });
+
+  if (error) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent(messageFor(error))}`);
+  }
+
+  revalidatePath(`/canteens/${canteenId}`);
+  redirect(`/canteens/${canteenId}`);
+}
+
+export async function setPartnerActive(
+  canteenId: string,
+  profileId: string,
+  active: boolean,
+): Promise<void> {
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.rpc('admin_set_partner_active', {
+    p_profile_id: profileId,
+    p_canteen_id: canteenId,
+    p_active: active,
+  });
+
+  if (error) {
+    redirect(`/canteens/${canteenId}?error=${encodeURIComponent(messageFor(error))}`);
+  }
+
+  revalidatePath(`/canteens/${canteenId}`);
+  redirect(`/canteens/${canteenId}`);
+}

@@ -119,6 +119,12 @@ describe('what authenticated may write, column by column', () => {
     expect(await hasTablePrivilege('authenticated', 'canteens', 'DELETE')).toBe(false);
   });
 
+  it('on hostels: an admin edits them, nobody deletes them', async () => {
+    expect(await hasTablePrivilege('authenticated', 'hostels', 'INSERT')).toBe(true);
+    expect(await hasTablePrivilege('authenticated', 'hostels', 'UPDATE')).toBe(true);
+    expect(await hasTablePrivilege('authenticated', 'hostels', 'DELETE')).toBe(false);
+  });
+
   it('on canteen_staff: nothing — a membership carries a role change with it', async () => {
     for (const priv of ['INSERT', 'UPDATE', 'DELETE']) {
       expect(await hasTablePrivilege('authenticated', 'canteen_staff', priv)).toBe(false);
@@ -204,9 +210,10 @@ describe('functions', () => {
                             'admin_set_partner_canteen', 'admin_set_partner_active',
                             'admin_update_canteen', 'admin_set_canteen_active',
                             'admin_create_canteen', 'admin_attach_canteen_staff',
-                            'admin_detach_canteen_staff', 'canteen_set_partner_active')`,
+                            'admin_detach_canteen_staff', 'admin_set_profile_active',
+                            'canteen_set_partner_active')`,
     );
-    expect(rows).toHaveLength(13);
+    expect(rows).toHaveLength(14);
     expect(rows.every((r) => r.ok)).toBe(true);
   });
 

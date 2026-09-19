@@ -3,17 +3,17 @@
 Vertical slices. Each phase ends with something demonstrable end-to-end, not a set of
 half-built screens.
 
-| Phase | Outcome                                                                          | Status         |
-| ----- | -------------------------------------------------------------------------------- | -------------- |
-| 0     | Repository assessment, architecture, ADRs                                        | ✅ done        |
-| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done        |
-| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done        |
-| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done        |
-| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done        |
-| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done        |
-| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | 🔷 in progress |
-| 7     | Secondary: ratings, favourites, reorder, coupons, complaints, analytics          | ⬜             |
-| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜             |
+| Phase | Outcome                                                                          | Status  |
+| ----- | -------------------------------------------------------------------------------- | ------- |
+| 0     | Repository assessment, architecture, ADRs                                        | ✅ done |
+| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done |
+| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done |
+| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done |
+| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
+| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done |
+| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ✅ done |
+| 7     | Secondary: ratings, favourites, reorder, coupons, complaints                     | ⬜ next |
+| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜      |
 
 ---
 
@@ -80,7 +80,7 @@ change live. This is the phase that makes the product real.
 The partner's own canteen's ready queue, atomic claim, pickup, deliver, daily history and
 earnings. Canteen-scoped throughout (ADR 008). Completes the end-to-end flow.
 
-## Phase 6 — admin 🔷
+## Phase 6 — admin ✅
 
 Overview metrics, order search/filter, user and canteen management, hostel management.
 
@@ -144,7 +144,47 @@ posting: `transition_order` resolves canteen before delivery, so they could clai
 delivery and then never be able to mark it picked up. `canteen_staff` lost its client
 write grant in the same migration.
 
-**Left:** delivery staff, students, hostels, analytics.
+Delivery staff followed as a second section on the same page, since partners are
+canteen-scoped (ADR 008) and the canteen is already in hand. Onboarding moves anyone
+already posted elsewhere and keeps the old row retired, because `orders` points at it
+through a composite foreign key.
+
+Building the UI surfaced three faults in `admin_set_partner_canteen`, all fixed in one
+migration. It required the canteen to be active, which made the create-disabled-then-staff
+flow impossible for partners while it already worked for counter staff. It had no guard
+against onboarding someone who works a counter — the reverse guard existed, so the broken
+pairing was simply reachable from the other side. And it set `role = 'delivery'`
+unconditionally, which would have stripped the dashboard from an admin put on a roster.
+
+Accounts and hostels came last before analytics. `/students` lists every account, not
+only students, because a role change is how someone becomes counter staff or a partner in
+the first place. Hostels edit in place on one page — four rows that rarely change did not
+need a detail route.
+
+Two more dead controls turned real. `profiles.is_active` had gated delivery access since
+Phase 2 — `my_delivery_canteen_id()` requires it — but no grant and no function could ever
+write it, so suspending an account was impossible; `admin_set_profile_active` makes it
+work. And `hostels` gave up DELETE: `orders.hostel_id` refuses to drop a hostel with
+orders, but one without them vanished cleanly and took every student's saved address with
+it through `on delete set null`.
+
+The guard worth naming: an admin can no longer demote or suspend themselves. `admin_set_role`
+had written whatever it was given, and a sole admin demoting themselves would have locked
+everyone out permanently, because every route back to `role` requires an admin.
+
+Analytics closed the phase. `revenue_by_canteen_day` sums delivered orders per canteen
+per campus day, so the page reads canteens × days rather than every order ever placed.
+It is a `security_invoker` view, which means `orders_read` scopes it: an admin sees the
+platform and a canteen would see only its own takings — a canteen revenue page for free
+whenever that is wanted. A plain view runs as its owner and would have handed every
+caller the platform's money.
+
+It also corrected a formula this repo had written down twice. "Canteen revenue is
+subtotal + (delivery − platform)" ignores the discount, overstating the canteen's take on
+any order with a coupon. What a canteen actually receives is `total − platform_fee`.
+Discounts are reported as their own figure rather than netted into either side, because
+who funds them is still undecided (ADR 008) — and shipping coupons in Phase 7 will force
+that decision.
 
 ## Phase 7 — secondary features
 

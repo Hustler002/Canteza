@@ -5,6 +5,7 @@ import type { SearchParams } from '@/lib/order-filters';
 import { updateCanteen } from '../actions';
 import { CanteenFields } from '../canteen-fields';
 import { StaffSection } from '../staff-section';
+import { DeliverySection } from '../delivery-section';
 
 /**
  * Edit one canteen.
@@ -65,6 +66,7 @@ export default async function CanteenEditPage({
       </section>
 
       <StaffSection supabase={supabase} canteenId={id} />
+      <DeliverySection supabase={supabase} canteenId={id} />
     </>
   );
 }

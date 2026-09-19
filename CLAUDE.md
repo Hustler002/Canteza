@@ -8,9 +8,9 @@
 
 ## Where the project is right now
 
-**Phase 6 in progress.** The admin dashboard searches every order, reads its status trail,
-and creates, edits, staffs and disables canteens: 256 tests green.
-**Next** — delivery staff, students, hostels, analytics.
+**Phase 6 complete.** The admin dashboard covers orders, canteens, counter and delivery
+staff, accounts, hostels and revenue: 294 tests green.
+**Phase 7 (ratings, favourites, coupons, complaints) is next.**
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -22,8 +22,8 @@ and creates, edits, staffs and disables canteens: 256 tests green.
 ✅ Phase 3  typed data access, auth, role routing, both app shells + 22 tests
 ✅ Phase 4  browse -> cart -> checkout -> order -> canteen board -> live status + 14 tests
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
-🔷 Phase 6  admin: orders, status trail, canteens + staff + 57 tests ← IN PROGRESS
-⬜ Phase 7  ratings, favourites, coupons, complaints, analytics
+✅ Phase 6  admin: orders, canteens, staff, accounts, hostels, revenue + 95
+⬜ Phase 7  ratings, favourites, reorder, coupons, complaints          ← NEXT
 ⬜ Phase 8  push, Razorpay, Sentry, deploy
 ```
 
@@ -84,22 +84,25 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 ### `supabase/` — the database
 
-| File                                | Holds                                                                   |
-| ----------------------------------- | ----------------------------------------------------------------------- |
-| `..._schema.sql`                    | 19 tables, indexes, `canteens_public` view, `order_transitions` table   |
-| composite FK                        | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`       |
-| `..._rls.sql`                       | RLS helpers, policies, column-level grants, realtime                    |
-| `..._functions.sql`                 | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
-| `..._student_default_address.sql`   | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
-| `..._delivery_shift_toggle.sql`     | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
-| `..._harden_default_privileges.sql` | **Security.** Revokes Supabase's blanket grants, restates the real ones |
-| `..._admin_set_partner_active.sql`  | Admin ends or restores a delivery posting; canteen id is explicit       |
-| `..._canteen_column_grants.sql`     | **Security.** Staff write hours + pause only; admin writes via RPC      |
-| `..._canteen_create.sql`            | `admin_create_canteen`; canteens lose client INSERT and DELETE          |
-| `..._canteen_staff_attach.sql`      | Attach/detach staff; writes the role with the row. RPC-only table       |
-| `seed.sql`                          | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
-| `seed-users.mjs`                    | Accounts via the Auth API, then demo orders through the real RPCs       |
-| `test/`                             | 145 tests on in-process Postgres — see `test/README.md`                 |
+| File                                 | Holds                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| `..._schema.sql`                     | 19 tables, indexes, `canteens_public` view, `order_transitions` table   |
+| composite FK                         | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`       |
+| `..._rls.sql`                        | RLS helpers, policies, column-level grants, realtime                    |
+| `..._functions.sql`                  | `place_order`, `transition_order`, `claim_delivery`, `release_delivery` |
+| `..._student_default_address.sql`    | `profiles.default_hostel_id/block/room`, all-or-nothing                 |
+| `..._delivery_shift_toggle.sql`      | `is_online` gates the queue and claiming; `OFF_SHIFT` error             |
+| `..._harden_default_privileges.sql`  | **Security.** Revokes Supabase's blanket grants, restates the real ones |
+| `..._admin_set_partner_active.sql`   | Admin ends or restores a delivery posting; canteen id is explicit       |
+| `..._canteen_column_grants.sql`      | **Security.** Staff write hours + pause only; admin writes via RPC      |
+| `..._canteen_create.sql`             | `admin_create_canteen`; canteens lose client INSERT and DELETE          |
+| `..._canteen_staff_attach.sql`       | Attach/detach staff; writes the role with the row. RPC-only table       |
+| `..._delivery_partner_guards.sql`    | Onboarding works on a disabled canteen; refuses counter staff           |
+| `..._profiles_and_hostels_admin.sql` | `admin_set_profile_active`; no self-demotion; hostels lose DELETE       |
+| `..._revenue_view.sql`               | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it         |
+| `seed.sql`                           | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings      |
+| `seed-users.mjs`                     | Accounts via the Auth API, then demo orders through the real RPCs       |
+| `test/`                              | 172 tests on in-process Postgres — see `test/README.md`                 |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -118,6 +121,7 @@ admin_create_canteen(name, description, phone, image_url,
                      min_order_paise, opens_at, closes_at) -> uuid  -- starts disabled
 admin_attach_canteen_staff(profile_id, canteen_id)   -- moves them if already posted
 admin_detach_canteen_staff(profile_id, canteen_id)   -- and puts the role back
+admin_set_profile_active(profile_id, active)         -- suspend; never yourself
 canteen_set_partner_active(profile_id, active)                -- canteen retires own staff
 ```
 
@@ -285,6 +289,11 @@ app/(dashboard)/canteens/[id]/    edit: name, hours, min order, pause switch
 app/(dashboard)/canteens/new/     create; the canteen starts disabled
 app/(dashboard)/canteens/canteen-fields  the form both of them render
 app/(dashboard)/canteens/staff-section   who works this counter, attach/detach
+app/(dashboard)/canteens/delivery-section who delivers for it, onboard/retire
+app/(dashboard)/students/         every account: search, role, suspend/restore
+app/(dashboard)/hostels/          buildings and their blocks, edited in place
+app/(dashboard)/analytics/        revenue per canteen over a campus date range
+src/lib/people-filters.ts         account search + blocks text[], pure and tested
 app/(dashboard)/canteens/actions  the first server actions in this repo
 src/lib/order-filters.ts          URL -> query, pure and tested
 src/lib/canteen-form.ts           FormData -> RPC args, pure and tested
@@ -316,6 +325,28 @@ pages match rather than inventing a second way:
   here never `update` a table directly and never return state to a client component:
   they call a `security definer` function and `redirect` with `?error=` or `?saved=`.
   That keeps every admin page a server component and makes a failed save a link.
+- **An aggregate view is `security_invoker`.** `revenue_by_canteen_day` runs with the
+  caller's privileges, so `orders_read` scopes it: an admin sees the platform, a canteen
+  sees only its own takings. A normal view runs as its owner and would have handed every
+  caller the whole platform's money. `canteens_public` is deliberately the other kind —
+  its own `where is_active` is the filter, and there is nothing private in it.
+- **Nothing an admin does may lock the platform out of its own administration.** An
+  admin cannot demote or suspend themselves — a sole admin doing either leaves no path
+  back, since every route to `role` and `is_active` requires an admin. The database
+  refuses both; the page also declines to render the controls on your own row.
+- **The name search uses `.ilike()` on one column, not `or=(...)`.** Names contain
+  spaces, and a space inside a PostgREST `or` group needs quoting rules that are easy to
+  get wrong. One parameterised filter has no injection surface at all, and the cost is
+  that phone is not searched in the same query.
+- **A person is counter staff or a delivery partner, never both.** Each onboarding
+  function refuses the other's rows (`ALREADY_DELIVERY_PARTNER`, `ALREADY_CANTEEN_STAFF`).
+  Not tidiness: `transition_order` resolves the actor admin → canteen → delivery, so
+  someone holding both acts as canteen on their own canteen's orders and could claim a
+  delivery they can then never mark picked up. The guard must exist on **both** sides —
+  it only had one until Phase 6 built the delivery UI.
+- **Staffing works on a disabled canteen.** A canteen is created switched off so its
+  people and menu go in first, so neither `admin_attach_canteen_staff` nor
+  `admin_set_partner_canteen` may require `is_active` — only that the canteen exists.
 - **A membership and a role are written together, or not at all.** `my_canteen_id()`
   reads `canteen_staff` and never looks at `profiles.role`: the row grants the data, the
   role picks the app. `admin_attach_canteen_staff` writes both, which is why
@@ -333,31 +364,43 @@ pages match rather than inventing a second way:
   login redirect never fired and, worse, the session was never refreshed. The build
   output printing `ƒ Proxy (Middleware)` is the check that it is wired up.
 
-## Next session: continue Phase 6
+## Next session: Phase 7
 
-`apps/admin`, Next.js 16. Orders is done; the rest is new pages in the same shape,
-against data and permissions that already exist:
+Phase 6 is finished — what it built and why is above. The five areas it covered, for
+reference when extending them:
 
 1. ~~**Orders**: search, filter, status history trail.~~ ✅ done
 2. ~~**Canteens**: create, edit hours, disable.~~ ✅ done. A new canteen is created
    **disabled** and has no staff and no menu, so the admin adds both and then enables it
    from the list. Attaching a staff account is still missing — it belongs with the users
    page, because `canteen_staff_one_canteen` makes "attach" sometimes mean "move".
-3. **Delivery staff**: onboard and transfer with `admin_set_partner_canteen`, retire or
-   restore with `admin_set_partner_active` (the SQL and its tests landed with the orders
-   slice; the UI control did not). Note a new posting starts **off shift** — the partner
-   goes online themselves.
-4. **Students, hostels**: manage. `admin_set_role` is the only path to a role change.
-   Note the admin app cannot see anyone's **email** — that lives in `auth.users`, which
+3. ~~**Delivery staff**: onboard, transfer, retire, restore.~~ ✅ done, as a section on
+   the canteen's own page. A new posting starts **off shift** — the partner goes online
+   themselves, and `is_online` is the one column on that table a client may write.
+4. ~~**Students, hostels**: manage.~~ ✅ done. `/students` is every account, not only
+   students — a role change is how someone becomes staff. Names and phones stay
+   read-only: the grant permits writing them, but they are the person's own details.
+   The admin app cannot see anyone's **email** — that lives in `auth.users`, which
    PostgREST does not expose — so people are identified by name and phone. If that is
    not enough to tell two students apart, the fix is a view or an RPC, not a client read.
-5. **Analytics**: platform revenue is `sum(platform_fee_paise)` on delivered orders —
-   our cut only. Canteen revenue is subtotal + (delivery fee − platform fee).
+5. ~~**Analytics**: revenue.~~ ✅ done, from `revenue_by_canteen_day`. **The formula this
+   file used to state was wrong**: "subtotal + (delivery − platform)" ignores the
+   discount and so overstates the canteen's take on any order with a coupon. What the
+   canteen actually receives is `total_paise − platform_fee_paise`, because `total` is
+   what the student paid. Discounts are reported as their own figure rather than netted
+   into either side, since who funds them is still open (ADR 008).
 
 Two things the orders page deliberately does not do: **no pagination** (100 newest, and
 it says so when it truncates — add a cursor when a real dataset makes that bite), and
 **no "you are here" in the nav**, because highlighting it would make the nav a client
-component for one line of styling.
+component for one line of styling. The accounts page has the same 100-row ceiling.
+
+**Phase 7 starts here.** Ratings, favourites, reorder, coupons and complaints — every one
+of those tables already exists from Phase 2 (`reviews`, `favorites`, `coupons`,
+`coupon_redemptions`, `support_tickets`) with RLS and client grants, and none has a
+screen. **Settle the coupon-funding question first** (see Known gaps and ADR 008): the
+analytics page reports discounts as their own figure precisely because it is undecided,
+and shipping coupons will force the answer.
 
 **Still unverified anywhere:** nothing has run against a real Supabase. Realtime,
 Auth and PostgREST are exercised only by types and the SQL tests — all of it needs

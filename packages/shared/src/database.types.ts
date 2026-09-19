@@ -908,6 +908,22 @@ export type Database = {
       };
       Relationships: [];
     };
+    revenue_by_canteen_day: {
+      Row: {
+        day: string | null;
+        canteen_id: string | null;
+        canteen_name: string | null;
+        orders: number | null;
+        gross_subtotal_paise: number | null;
+        discounts_paise: number | null;
+        delivery_fees_paise: number | null;
+        packaging_fees_paise: number | null;
+        students_paid_paise: number | null;
+        platform_fee_paise: number | null;
+        canteen_received_paise: number | null;
+      };
+      Relationships: [];
+    };
     };
     Functions: {
     admin_attach_canteen_staff: {
@@ -956,6 +972,13 @@ export type Database = {
         p_profile_id: string | null;
         p_canteen_id: string | null;
         p_approved?: boolean | null;
+      };
+      Returns: undefined;
+    };
+    admin_set_profile_active: {
+      Args: {
+        p_profile_id: string | null;
+        p_active: boolean | null;
       };
       Returns: undefined;
     };

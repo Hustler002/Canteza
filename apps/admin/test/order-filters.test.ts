@@ -90,3 +90,21 @@ describe('campus day bounds', () => {
     expect(campusDayEnd('2028-02-28')).toBe('2028-02-29T00:00:00+05:30');
   });
 });
+
+describe('campus day arithmetic', () => {
+  it('reads today from the campus clock, not the server’s', async () => {
+    const { campusToday } = await import('../src/lib/order-filters');
+    // 19:00 UTC on the 19th is 00:30 IST on the 20th. A server running UTC would call
+    // this the 19th and file a late-night order under the wrong day.
+    expect(campusToday(new Date('2026-09-19T19:00:00Z'))).toBe('2026-09-20');
+    expect(campusToday(new Date('2026-09-19T15:02:00Z'))).toBe('2026-09-19');
+  });
+
+  it('shifts whole days across month and year ends', async () => {
+    const { shiftDays } = await import('../src/lib/order-filters');
+    expect(shiftDays('2026-09-19', -30)).toBe('2026-08-20');
+    expect(shiftDays('2026-01-01', -1)).toBe('2025-12-31');
+    expect(shiftDays('2028-03-01', -1)).toBe('2028-02-29');
+    expect(shiftDays('2026-09-19', 0)).toBe('2026-09-19');
+  });
+});
