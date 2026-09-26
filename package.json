@@ -21,7 +21,7 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:seed:users": "node supabase/seed-users.mjs",
+    "db:seed:users": "node --env-file=.env supabase/seed-users.mjs",
     "db:push": "supabase db push",
     "db:types": "node scripts/gen-types.mjs",
     "db:lint": "supabase db lint --level warning",
@@ -39,5 +39,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
     "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

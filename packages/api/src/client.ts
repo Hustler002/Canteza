@@ -37,7 +37,17 @@ export function createCampusClient(config: CampusClientConfig): CampusClient {
   }
   // The anon key is safe in a client bundle: everything it can reach is constrained
   // by RLS. The service role key must never appear in an app.
-  if (config.anonKey.length > 80 && config.anonKey.includes('service_role')) {
+  //
+  // Two formats, and only one of them can be recognised by what it says. A legacy key
+  // is a JWT whose payload spells `service_role` in clear, so the string is the tell
+  // and the length floor stops a short key that merely mentions the words from
+  // tripping it. Supabase's newer keys are opaque -- `sb_publishable_...` for a client,
+  // `sb_secret_...` for a server -- so there is nothing to read inside one and the
+  // prefix is the only thing that separates the safe key from the dangerous one.
+  const looksLikeLegacyServiceKey =
+    config.anonKey.length > 80 && config.anonKey.includes('service_role');
+
+  if (looksLikeLegacyServiceKey || config.anonKey.startsWith('sb_secret_')) {
     throw new Error('Refusing to start: that looks like a service role key, not an anon key.');
   }
 

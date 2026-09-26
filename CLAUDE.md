@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 7 complete.** 315 tests green offline, plus 59/59 live checks
+**Phase 7 complete.** 317 tests green offline, plus 59/59 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history and engagement. Every admin page has been driven in a
 browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
@@ -38,7 +38,8 @@ tsconfig.base.json      strict, noUncheckedIndexedAccess, exactOptionalPropertyT
 eslint.config.js        flat config, typescript-eslint recommended
 vitest.config.ts        packages/**/test, apps/**/test, supabase/test
 supabase/tsconfig.json  so `npm run typecheck` actually covers the database tests
-.env.example            SUPABASE_URL / ANON_KEY / SERVICE_ROLE_KEY
+.env.example            all three env files in one place — see "Environment" below
+.gitattributes          LF everywhere, so a Windows clone does not fail format:check
 docs/architecture.md    the living architecture document
 docs/decisions/         ADRs 001–008
 packages/shared/        the domain core
@@ -137,11 +138,40 @@ npm run db:start       # supabase start          (needs Docker)
 npm run db:reset       # re-apply migrations + seed.sql
 npm run db:seed:users  # demo accounts + demo orders (needs a running Supabase)
 npm run db:types       # regenerate database.types.ts from the migrations (no Docker)
-npm run verify:live    # 34 checks on the live project: auth, realtime, order path, RLS
+npm run verify:live    # 59 checks on the live project: auth, realtime, order path, RLS
 npm run dev:mobile     # expo start
 npm run dev:admin      # next dev
 npm run db:push        # deploy migrations to the linked project
 ```
+
+## Environment — three files, not one
+
+`.env.example` documents all of it, but the layout is the part worth knowing before you
+go looking for a bug that isn't there. **Next and Expo each load env files from their own
+package directory and neither walks up to the monorepo root**, so a single root `.env`
+configures the scripts and leaves both apps with nothing. Verified directly rather than
+assumed: `@next/env` loading from `apps/admin` with a root `.env` present returns zero
+files, and `@expo/env` from `apps/mobile` does the same.
+
+| File                    | Read by                        | Holds                                     |
+| ----------------------- | ------------------------------ | ----------------------------------------- |
+| `.env`                  | `verify:live`, `db:seed:users` | `SUPABASE_URL`, anon key, **service key** |
+| `apps/admin/.env.local` | `next dev`, `next build`       | `NEXT_PUBLIC_SUPABASE_URL` + anon key     |
+| `apps/mobile/.env`      | `expo start` (`dev:mobile`)    | `EXPO_PUBLIC_SUPABASE_URL` + anon key     |
+
+All three are gitignored, so a fresh clone has none of them. `next dev` printing
+`Environments: .env.local` is the check that the admin one is wired up.
+
+Both npm scripts that need the root file pass node's `--env-file=.env`, so it is read
+automatically; a variable already exported in the shell still wins over the file. It is
+`--env-file`, not `--env-file-if-exists`, because that flag arrived in Node **v22.9.0**
+and `engines` here is `>=20` — CI runs 20 and would break on it.
+
+**The service role key belongs in the root `.env` and nowhere else.** `createCampusClient`
+refuses one, and it has to recognise two shapes to do it: a legacy key is a JWT with
+`service_role` written in its payload, while a newer `sb_secret_...` key is opaque and
+only its prefix gives it away. `sb_publishable_...` is the new anon key and is the one
+that belongs in a bundle.
 
 ## Rules this codebase follows
 
@@ -271,7 +301,7 @@ way, so going off shift cannot strand food someone is carrying.
 ## Verifying against a real database
 
 **This has been done.** A hosted project is linked by `.env` (gitignored), the schema and
-seed are pushed, and `npm run verify:live` passes 34/34. Re-run it after any migration.
+seed are pushed, and `npm run verify:live` passes 59/59. Re-run it after any migration.
 
 `scripts/verify-live.mjs` uses the **anon key and real sign-ins only** — never the service
 role key, because a script that can bypass RLS cannot test it. That is the difference from

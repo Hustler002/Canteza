@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -9,7 +11,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, type Theme } from '../theme';
 
 /**
@@ -19,34 +21,100 @@ import { useTheme, type Theme } from '../theme';
  * Everything reads tokens from useTheme(); no literal colours or spacings below.
  */
 
+/**
+ * Every screen's frame, and the one place the keyboard is handled.
+ *
+ * Handling it here rather than per screen is deliberate: six screens take text input
+ * and every one of them was getting it wrong, because getting it right is fiddly and
+ * nobody remembers to. A screen now opts into nothing and cannot forget.
+ *
+ * How it works on each platform, since they genuinely differ:
+ *
+ * - **Android** resizes the app window when the keyboard opens
+ *   (`softwareKeyboardLayoutMode: "resize"`, stated explicitly in app.json rather
+ *   than left to the default). The ScrollView shrinks with it, so the content
+ *   scrolls and a `footer` lands directly above the keyboard for free.
+ * - **iOS** never resizes, so `KeyboardAvoidingView` adds the padding instead, and
+ *   `automaticallyAdjustKeyboardInsets` scrolls the focused field into view.
+ *
+ * Neither path contains a pixel offset, so nothing here is tuned to one device.
+ *
+ * `footer` is the sticky action area -- a checkout CTA, a submit button. It sits
+ * outside the ScrollView so it never scrolls away, and inside the
+ * KeyboardAvoidingView so it rides above the keyboard rather than under it.
+ */
 export function Screen({
   children,
   scroll = false,
   padded = true,
+  footer,
 }: {
   children: ReactNode;
   scroll?: boolean;
   padded?: boolean;
+  footer?: ReactNode;
 }) {
   const t = useTheme();
-  const inner: ViewStyle = { flex: 1, padding: padded ? t.space.lg : 0, gap: t.space.lg };
+  const pad = padded ? t.space.lg : 0;
+  const inner: ViewStyle = { flex: 1, padding: pad, gap: t.space.lg };
+
+  // A sticky footer already covers the bottom inset, so letting SafeAreaView pad it
+  // too would leave a stripe of background under the bar.
+  const edges = footer ? (['top'] as const) : (['top', 'bottom'] as const);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: t.color.background }}
-      edges={['top', 'bottom']}
-    >
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={{ padding: padded ? t.space.lg : 0, gap: t.space.lg }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={inner}>{children}</View>
-      )}
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.color.background }} edges={edges}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        {...(Platform.OS === 'ios' ? { behavior: 'padding' as const } : {})}
+      >
+        {scroll ? (
+          <ScrollView
+            contentContainerStyle={{ padding: pad, gap: t.space.lg, paddingBottom: pad + t.space.xl }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={inner}>{children}</View>
+        )}
+        {footer ? <StickyFooter>{footer}</StickyFooter> : null}
+      </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * The sticky action area. Floats over content with a top border and a lifted shadow
+ * so a long list visibly runs underneath it rather than appearing to stop short.
+ *
+ * It carries its own bottom safe-area inset, which is why `Screen` drops the bottom
+ * edge when a footer is present.
+ */
+export function StickyFooter({ children }: { children: ReactNode }) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: t.color.surface,
+          borderTopWidth: 1,
+          borderTopColor: t.color.border,
+          paddingHorizontal: t.space.lg,
+          paddingTop: t.space.md,
+          paddingBottom: Math.max(insets.bottom, t.space.md),
+          gap: t.space.sm,
+        },
+        t.elevation.raised,
+      ]}
+    >
+      {children}
+    </View>
   );
 }
 
@@ -176,12 +244,34 @@ export function Button({
   );
 }
 
+/**
+ * A labelled text input.
+ *
+ * `multiline` gets real handling rather than the default, which on Android is a
+ * one-line-tall box that grows downward off the screen: it starts at a comfortable
+ * few lines, aligns its text to the top, and scrolls inside itself once it fills up,
+ * so a long comment never pushes the submit button away.
+ *
+ * `maxLength` turns on a live counter, but only once the user is close to the limit
+ * -- a counter sitting at 0/280 before anyone has typed is noise, and a counter that
+ * appears at 240 is information.
+ */
 export function Field({
   label,
   error,
+  hint,
   ...props
-}: TextInputProps & { label: string; error?: string | undefined }) {
+}: TextInputProps & { label: string; error?: string | undefined; hint?: string | undefined }) {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
+
+  const multiline = props.multiline === true;
+  const length = typeof props.value === 'string' ? props.value.length : 0;
+  const limit = props.maxLength;
+  const showCount = typeof limit === 'number' && length > limit * 0.75;
+
+  const borderColor = error ? t.color.danger : focused ? t.color.primary : t.color.border;
+
   return (
     <View style={{ gap: t.space.sm }}>
       <Text style={[t.font.label, { color: t.color.textMuted }]}>{label}</Text>
@@ -189,18 +279,42 @@ export function Field({
         accessibilityLabel={label}
         placeholderTextColor={t.color.textFaint}
         {...props}
+        onFocus={(event) => {
+          setFocused(true);
+          props.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          props.onBlur?.(event);
+        }}
+        {...(multiline ? { textAlignVertical: 'top' as const } : {})}
         style={{
-          minHeight: t.minTouchTarget,
-          borderWidth: 1,
-          borderColor: error ? t.color.danger : t.color.border,
+          minHeight: multiline ? t.minTouchTarget * 2.25 : t.minTouchTarget,
+          maxHeight: multiline ? t.minTouchTarget * 4 : undefined,
+          borderWidth: focused ? 2 : 1,
+          borderColor,
           borderRadius: t.radius.md,
           paddingHorizontal: t.space.lg,
+          paddingVertical: multiline ? t.space.md : 0,
           color: t.color.text,
           backgroundColor: t.color.surface,
           fontSize: t.font.body.fontSize,
         }}
       />
-      {error ? <Text style={[t.font.caption, { color: t.color.danger }]}>{error}</Text> : null}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.sm }}>
+        <View style={{ flex: 1 }}>
+          {error ? (
+            <Text style={[t.font.caption, { color: t.color.danger }]}>{error}</Text>
+          ) : hint ? (
+            <Text style={[t.font.caption, { color: t.color.textMuted }]}>{hint}</Text>
+          ) : null}
+        </View>
+        {showCount ? (
+          <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+            {length}/{limit}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }

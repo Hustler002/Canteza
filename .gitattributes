@@ -1,0 +1,12 @@
+# Line endings are LF in the repository and LF in the working tree, on every OS.
+#
+# Without this file, a clone on Windows with `core.autocrlf=true` (git's own
+# Windows default) checks every file out with CRLF, and `npm run format:check`
+# then fails on all 148 of them — Prettier's `endOfLine` is "lf". The suite is
+# green, the code is untouched, and the verify gate can never pass locally.
+# `eol=lf` overrides `core.autocrlf`, so the checkout matches what CI sees.
+* text=auto eol=lf
+
+# The app icons and splash art. `text=auto` would detect these anyway; saying so
+# explicitly means a future binary format never depends on that detection.
+*.png binary

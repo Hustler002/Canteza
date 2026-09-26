@@ -12,7 +12,9 @@
  *   supabase start
  *   npm run db:seed:users
  *
- * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (see .env.example).
+ * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (see .env.example). `npm run
+ * db:seed:users` loads the root .env with node's --env-file, the same way
+ * `verify:live` does; a variable already exported in the shell still wins.
  * Never run this against production: the passwords are public.
  */
 
@@ -22,7 +24,7 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_BASE || !SERVICE_KEY) {
   console.error(
     'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.\n' +
-      'Run `supabase status` and export them, or copy .env.example to .env.',
+      'Copy .env.example to .env and fill the first block in, or export them yourself.',
   );
   process.exit(1);
 }

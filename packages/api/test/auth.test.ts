@@ -33,4 +33,22 @@ describe('createCampusClient', () => {
       }),
     ).toThrow(/service role/i);
   });
+
+  it('refuses the newer sb_secret_ key, which says nothing about its own role', () => {
+    expect(() =>
+      createCampusClient({
+        url: 'https://x.supabase.co',
+        anonKey: 'sb_secret_test_fixture',
+      }),
+    ).toThrow(/service role/i);
+  });
+
+  it('accepts the newer sb_publishable_ key, which is the one that belongs in a bundle', () => {
+    expect(() =>
+      createCampusClient({
+        url: 'https://x.supabase.co',
+        anonKey: 'sb_publishable_6wHsAIUHgVyOfifNqyBNWQ_YipbMxwV',
+      }),
+    ).not.toThrow();
+  });
 });

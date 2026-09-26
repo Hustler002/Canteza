@@ -30,7 +30,10 @@ if (!URL_BASE || !ANON_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY. See .env.example.');
   process.exit(1);
 }
-if (/service_role/.test(ANON_KEY)) {
+// A legacy key carries `service_role` in its JWT payload. A newer `sb_secret_...` key
+// is opaque and says nothing about itself, so the prefix is the only tell -- and this
+// check is the whole reason the file can claim to test RLS rather than bypass it.
+if (/service_role/.test(ANON_KEY) || ANON_KEY.startsWith('sb_secret_')) {
   console.error('That looks like a service role key. This script must run as anon.');
   process.exit(1);
 }
