@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 7 complete.** 328 tests green offline, plus 59/59 live checks
+**Phase 7 complete.** 331 tests green offline, plus 64/64 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history and engagement. Every admin page has been driven in a
 browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
@@ -138,7 +138,7 @@ npm run db:start       # supabase start          (needs Docker)
 npm run db:reset       # re-apply migrations + seed.sql
 npm run db:seed:users  # demo accounts + demo orders (needs a running Supabase)
 npm run db:types       # regenerate database.types.ts from the migrations (no Docker)
-npm run verify:live    # 59 checks on the live project: auth, realtime, order path, RLS
+npm run verify:live    # 64 checks on the live project: auth, realtime, order path, RLS
 npm run dev:mobile     # expo start
 npm run dev:admin      # next dev
 npm run db:push        # deploy migrations to the linked project
@@ -182,6 +182,17 @@ own orders, so an invoker view would compute each student a private median from 
 own handful of orders, and a new student would see no ETA at all. A kitchen's speed is
 a property of the kitchen. That is only safe because **every column is an aggregate**;
 `canteen-stats.test.ts` pins the column list so adding a per-order one fails loudly.
+
+`verify:live` §8 is where that bet is settled with real sign-ins: two students read the
+view and must see **identical** numbers, which anywhere else in this file would be a
+leak and here is the requirement.
+
+**A median of 0 means scripted, not fast.** On the live project the demo orders are
+driven by `seed-users.mjs` and `verify:live`, which move an order from accepted to
+ready in milliseconds — so `median_prep_minutes` reads 0 over a healthy sample.
+`estimatedMinutes()` requires a median strictly above zero before it trusts one, so
+those canteens quote the default instead. Real kitchens will populate it; a zero is
+never worth showing.
 
 The prep figure is the **median** of `accepted → ready` over 30 days: the median so the
 order nobody marked ready until closing does not drag it, and that window so a canteen
@@ -228,6 +239,20 @@ Both npm scripts that need the root file pass node's `--env-file=.env`, so it is
 automatically; a variable already exported in the shell still wins over the file. It is
 `--env-file`, not `--env-file-if-exists`, because that flag arrived in Node **v22.9.0**
 and `engines` here is `>=20` — CI runs 20 and would break on it.
+
+**`EXPO_PUBLIC_*` must be written out in full, never `process.env[name]`.** Expo
+inlines them with a Babel transform that rewrites the literal text
+`process.env.EXPO_PUBLIC_FOO` at build time — a static substitution, so a computed
+access is invisible to it. The trap is that a computed access works fine in
+development, because `expo start` injects a populated `process.env` object at runtime;
+a production `expo export` ships no such object. This app shipped exactly that bug: a
+release would have read `undefined` for both credentials, fallen through to the
+unsubstituted `$SUPABASE_URL` in `app.json`, and thrown "Supabase URL and anon key are
+required" at module load — crashing on launch while every dev build was fine. Nothing
+in `verify` could see it, because the source is valid either way and the difference
+lives in the bundler. `apps/mobile/test/env-inlining.test.ts` now pins it on the source
+text; the real proof is grepping the exported Hermes bundle for the project ref, which
+was absent before the fix and present after.
 
 **The service role key belongs in the root `.env` and nowhere else.** `createCampusClient`
 refuses one, and it has to recognise two shapes to do it: a legacy key is a JWT with
@@ -367,7 +392,7 @@ way, so going off shift cannot strand food someone is carrying.
 ## Verifying against a real database
 
 **This has been done.** A hosted project is linked by `.env` (gitignored), the schema and
-seed are pushed, and `npm run verify:live` passes 59/59. Re-run it after any migration.
+seed are pushed, and `npm run verify:live` passes 64/64. Re-run it after any migration.
 
 `scripts/verify-live.mjs` uses the **anon key and real sign-ins only** — never the service
 role key, because a script that can bypass RLS cannot test it. That is the difference from

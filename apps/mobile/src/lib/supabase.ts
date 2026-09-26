@@ -13,15 +13,44 @@ import { secureSessionStorage } from './storage';
 
 const extra = Constants.expoConfig?.extra ?? {};
 
-function readEnv(name: string, fallback: unknown): string {
-  const value = process.env[name] ?? (typeof fallback === 'string' ? fallback : '');
-  // app.json carries `$SUPABASE_URL` placeholders for the EAS build to substitute;
-  // an unsubstituted one means the environment was never configured.
-  return value.startsWith('$') ? '' : value;
+/**
+ * Pick the first usable value, and reject a placeholder.
+ *
+ * `app.json` carries `$SUPABASE_URL` in `extra` for a build to substitute; an
+ * unsubstituted one means the environment was never configured, and passing it on
+ * would produce a client pointed at a URL called "$SUPABASE_URL".
+ */
+function usable(value: unknown, fallback: unknown): string {
+  for (const candidate of [value, fallback]) {
+    if (typeof candidate === 'string' && candidate !== '' && !candidate.startsWith('$')) {
+      return candidate;
+    }
+  }
+  return '';
 }
 
-const url = readEnv('EXPO_PUBLIC_SUPABASE_URL', extra.supabaseUrl);
-const anonKey = readEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY', extra.supabaseAnonKey);
+/**
+ * **These two reads must stay written out in full.**
+ *
+ * Expo inlines `EXPO_PUBLIC_*` with a Babel transform that rewrites the literal text
+ * `process.env.EXPO_PUBLIC_FOO` into its value at build time. It is a static
+ * substitution, not a runtime lookup, so a computed access — `process.env[name]`,
+ * which is what this file used to do — is invisible to it and is simply left in the
+ * bundle to resolve against nothing.
+ *
+ * That difference does not show up in development, which is what made it survive:
+ * `expo start` injects a populated `process.env` object at runtime, so a dynamic
+ * lookup works perfectly on a phone connected to Metro. A production `expo export`
+ * ships no such object. The old code therefore read `undefined` for both values in
+ * any real build, fell through to the unsubstituted `$SUPABASE_URL` placeholder,
+ * and `createCampusClient` threw "Supabase URL and anon key are required" at module
+ * load — a release that crashed on launch while every dev build was fine.
+ *
+ * Verified by grepping the exported Hermes bundle for the project ref: absent
+ * before this change, present after it.
+ */
+const url = usable(process.env.EXPO_PUBLIC_SUPABASE_URL, extra.supabaseUrl);
+const anonKey = usable(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY, extra.supabaseAnonKey);
 
 export const supabase = createCampusClient({
   url,

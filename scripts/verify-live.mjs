@@ -593,6 +593,56 @@ async function main() {
       .maybeSingle();
     check('the student reads what was done about it', Boolean(studentReads?.resolution));
   }
+
+  // -------------------------------------------------------------------------
+  section('8. Canteen stats');
+  // -------------------------------------------------------------------------
+  // `canteen_stats` is the one view in this schema that deliberately is NOT
+  // security_invoker, which makes it the one worth checking hardest with real
+  // sign-ins. `orders_read` would otherwise scope it per caller and hand every
+  // student a private median built from their own orders.
+  //
+  // So the check that matters is the inverse of everywhere else in this file: two
+  // different students must see *identical* numbers. Anywhere else that would be a
+  // leak; here it is the requirement, and it can only be proven with two sessions.
+
+  const { data: riyaStats, error: statsError } = await people.riya.client
+    .from('canteen_stats')
+    .select('*');
+  check('a student reads canteen stats', Array.isArray(riyaStats), statsError?.message);
+
+  if (Array.isArray(riyaStats) && riyaStats.length > 0) {
+    // Running as owner is only defensible because nothing per-order survives the
+    // GROUP BY. If a column is ever added, this is where it gets caught on a real
+    // project rather than in the harness.
+    const columns = Object.keys(riyaStats[0]).sort().join(',');
+    check(
+      'it exposes aggregates only, never a per-order column',
+      columns === 'avg_food_rating,canteen_id,median_prep_minutes,prep_sample_size,review_count',
+      `saw: ${columns}`,
+    );
+
+    const { data: arjunStats } = await people.arjun.client.from('canteen_stats').select('*');
+    check(
+      'a second student sees the same figures, not their own slice',
+      JSON.stringify(arjunStats) === JSON.stringify(riyaStats),
+      'the view is scoping per caller — check it is not security_invoker',
+    );
+
+    const rated = riyaStats.find((row) => row.review_count > 0);
+    check(
+      'a rating average is backed by a review count',
+      rated === undefined || typeof rated.avg_food_rating === 'number',
+      'avg_food_rating was null while review_count was positive',
+    );
+
+    // Nobody writes a view. PostgREST refuses with 55000 (a non-updatable relation)
+    // rather than a policy error, because there is no policy involved at all.
+    const { error: writeError } = await people.riya.client
+      .from('canteen_stats')
+      .insert({ canteen_id: riyaStats[0].canteen_id });
+    check('no client can write to it', Boolean(writeError), 'the insert was accepted');
+  }
 }
 
 main()
