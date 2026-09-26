@@ -3,17 +3,17 @@
 Vertical slices. Each phase ends with something demonstrable end-to-end, not a set of
 half-built screens.
 
-| Phase | Outcome                                                                          | Status  |
-| ----- | -------------------------------------------------------------------------------- | ------- |
-| 0     | Repository assessment, architecture, ADRs                                        | ✅ done |
-| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done |
-| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done |
-| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done |
-| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done |
-| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done |
-| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ✅ done |
-| 7     | Menu management, ratings, favourites, reorder, coupons, complaints               | ✅ done |
-| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | ⬜ next |
+| Phase | Outcome                                                                          | Status     |
+| ----- | -------------------------------------------------------------------------------- | ---------- |
+| 0     | Repository assessment, architecture, ADRs                                        | ✅ done    |
+| 1     | Monorepo, tooling, shared domain core (state machine, pricing, rules) + tests    | ✅ done    |
+| 2     | Database schema, RLS, RPC functions, seed data                                   | ✅ done    |
+| 3     | Auth + role routing (mobile shell, admin shell)                                  | ✅ done    |
+| 4     | **Core slice:** browse → cart → checkout → order → canteen accepts → live status | ✅ done    |
+| 5     | Delivery partner: queue, claim, pickup, deliver, earnings                        | ✅ done    |
+| 6     | Admin dashboard: overview, orders, users, canteens, hostels                      | ✅ done    |
+| 7     | Menu management, ratings, favourites, reorder, coupons, complaints               | ✅ done    |
+| 8     | Push notifications, Razorpay, Sentry, EAS/Vercel deploy                          | 🔶 started |
 
 ---
 
@@ -298,3 +298,29 @@ It also caught two defects: `seed-users.mjs` could only ever be run once, becaus
 `place_order`'s idempotency returns the existing order and the script then replayed its
 transitions; and the overview page still described Phase 6 as unbuilt. Both fixed, and the
 seeder now proves itself by running twice in a row.
+
+---
+
+## Phase 8 — in progress
+
+**The in-app notification inbox is done** (`app/(student)/inbox.tsx`), and it needed no
+migration: `notify_order` has written a row per transition since Phase 2,
+`notifications_own` already scoped reads, `grant update (read_at)` already allowed
+exactly one writable column, and the table was already in the realtime publication.
+What was missing was a reader. `verify:live` §9 covers it with real sign-ins — the
+check worth having is the column grant, since a student marking their own notification
+read is allowed while reassigning one is refused outright with 42501, which is a
+privilege no policy could express.
+
+The wording is still not stored. The row holds `(audience, status, order_id)` and
+`orderNotification()` renders it, which is the same function push will call — so the
+in-app and push text cannot drift, and rewording needs neither a migration nor a
+backfill.
+
+**The rest of the phase is blocked on accounts, and three of the four are one
+decision.** Expo's own documentation states that remote push "is unavailable in Expo
+Go on Android from SDK 53", so push needs a development build; `@sentry/react-native`
+is a native module and needs the same; and a development build is an EAS build. Push,
+Sentry and EAS therefore stand or fall together, and nothing among them can be
+exercised on a phone until that move is made. Razorpay is independent but needs a
+merchant account and keys before its webhook can be written against anything real.

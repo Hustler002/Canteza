@@ -643,6 +643,155 @@ async function main() {
       .insert({ canteen_id: riyaStats[0].canteen_id });
     check('no client can write to it', Boolean(writeError), 'the insert was accepted');
   }
+
+  // -------------------------------------------------------------------------
+  section('9. Notification inbox');
+  // -------------------------------------------------------------------------
+  // `notify_order` has written a row per transition since Phase 2 and nothing read
+  // them until Phase 8. The interesting part is the grant rather than the policy:
+  // `read_at` is the only column a client may write, so a student can mark their own
+  // notification read and cannot touch whose it is. That is a column-level privilege,
+  // which no policy could express and no offline test can prove against a real
+  // PostgREST.
+
+  const { data: inbox, error: inboxError } = await people.riya.client
+    .from('notifications')
+    .select('*, orders ( code, canteen_name_snapshot, hostel_label )')
+    .order('created_at', { ascending: false })
+    .limit(25);
+  check('a student reads their notification inbox', Array.isArray(inbox), inboxError?.message);
+
+  if (Array.isArray(inbox) && inbox.length > 0) {
+    check(
+      'every notification belongs to the reader',
+      inbox.every((row) => row.user_id === people.riya.userId),
+      'orders_read/notifications_own let somebody else’s row through',
+    );
+
+    // The screen renders its wording from (audience, status) plus the order, so the
+    // embed resolving is what stands between a notification and "your order".
+    check(
+      'the order embed resolves, so a notification can name its order',
+      inbox.every((row) => row.order_id === null || row.orders !== null),
+      'an order_id came back with no embedded order',
+    );
+
+    const { count: unreadCount, error: countError } = await people.riya.client
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null);
+    check(
+      'the unread badge counts without fetching rows',
+      typeof unreadCount === 'number',
+      countError?.message,
+    );
+
+    const { data: otherSees } = await people.arjun.client
+      .from('notifications')
+      .select('id')
+      .in(
+        'id',
+        inbox.slice(0, 5).map((row) => row.id),
+      );
+    check('another student cannot read them', (otherSees ?? []).length === 0);
+
+    // The column grant, not a policy: reassigning is refused outright with 42501
+    // rather than filtering to zero rows.
+    const { error: reassign } = await people.riya.client
+      .from('notifications')
+      .update({ user_id: people.arjun.userId })
+      .eq('id', inbox[0].id);
+    check(
+      'a student cannot reassign a notification, only mark it read',
+      reassign?.code === '42501',
+      `expected 42501, saw ${reassign?.code ?? 'no error at all'}`,
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  section('10. Payments');
+  // -------------------------------------------------------------------------
+  // ADR 006's seam, checked from the outside. The offline suite proves the functions
+  // behave; only a real PostgREST proves that a *signed-in student* cannot reach them.
+  // Every function here is granted to `service_role` alone, which is a plain execute
+  // privilege — no policy is involved, so nothing in the RLS tests would catch it if
+  // the grant were wrong.
+
+  const { data: myPayments, error: paymentsError } = await people.riya.client
+    .from('payments')
+    .select('id, order_id, method, status, amount_paise');
+  check('a student reads their own payments', Array.isArray(myPayments), paymentsError?.message);
+
+  if (Array.isArray(myPayments) && myPayments.length > 0) {
+    const target = myPayments[0];
+
+    // The single most important negative in the payment system: if a client could
+    // write this column, the PAYMENT_UNVERIFIED gate would be decorative.
+    const { error: selfPay } = await people.riya.client
+      .from('payments')
+      .update({ status: 'success' })
+      .eq('id', target.id);
+    check(
+      'a student cannot mark their own payment successful',
+      selfPay?.code === '42501',
+      `expected 42501, saw ${selfPay?.code ?? 'no error at all'}`,
+    );
+
+    check(
+      'every payment read back belongs to one of their own orders',
+      myPayments.every((row) => typeof row.order_id === 'string'),
+      'payments_read returned a row with no readable order',
+    );
+  }
+
+  // The three functions the Edge Function calls. `authenticated` has no EXECUTE on any
+  // of them, so PostgREST reports the function as missing from its schema cache rather
+  // than refusing it — either way the call does not happen.
+  for (const [label, fn, args] of [
+    [
+      'record a payment result',
+      'record_payment_result',
+      {
+        p_provider_order_id: 'order_probe',
+        p_provider_payment_id: 'pay_probe',
+        p_status: 'success',
+        p_amount_paise: 1,
+        p_failure_reason: null,
+      },
+    ],
+    [
+      'attach a Razorpay order',
+      'begin_razorpay_payment',
+      {
+        p_order_id: '00000000-0000-4000-8000-000000000000',
+        p_provider_order_id: 'order_probe',
+      },
+    ],
+    ['sweep unpaid orders', 'expire_unpaid_orders', {}],
+  ]) {
+    const { error: rpcError } = await people.riya.client.rpc(fn, args);
+    check(`a student cannot ${label}`, Boolean(rpcError), 'the call succeeded');
+  }
+
+  // The payment state machine is reference data, readable so a client can explain
+  // itself, and writable by nobody.
+  const { data: transitions } = await people.riya.client
+    .from('payment_transitions')
+    .select('from_status, to_status');
+  check(
+    'the payment transition table is readable',
+    (transitions ?? []).length > 0,
+    'payment_transitions came back empty',
+  );
+
+  const { error: writeTransition } = await people.riya.client
+    .from('payment_transitions')
+    .insert({ from_status: 'refunded', to_status: 'success' });
+  check(
+    'nobody can add a transition that would launder a refund back to paid',
+    Boolean(writeTransition),
+    'the insert was accepted',
+  );
 }
 
 main()

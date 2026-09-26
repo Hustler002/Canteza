@@ -10,6 +10,8 @@ import {
   useCanteenStats,
   useHostels,
   useMenuSearch,
+  useNotificationsRealtime,
+  useUnreadNotificationCount,
   useOrdersRealtime,
   orderFilters,
 } from '../../src/lib/queries';
@@ -49,6 +51,7 @@ export default function StudentHome() {
   const stats = useCanteenStats();
   const hostels = useHostels();
   const [term, setTerm] = useState('');
+  const unreadCount = useUnreadNotificationCount(identity.userId).data ?? 0;
 
   /*
    * Where this order is going, said up front rather than discovered at checkout.
@@ -66,6 +69,8 @@ export default function StudentHome() {
 
   // Live status without polling: an event invalidates, the query refetches.
   useOrdersRealtime(orderFilters.forStudent(identity.userId));
+  // A notification landing bumps the bell without a refresh or a poll.
+  useNotificationsRealtime(identity.userId);
 
   // A skeleton rather than a spinner: it says "a list of canteens is arriving",
   // which reads as fast, where a centred spinner reads as stalled.
@@ -109,7 +114,14 @@ export default function StudentHome() {
           title={`Hi ${identity.profile.full_name?.split(' ')[0] || 'there'}`}
           subtitle={deliveryLine}
           right={
-            <IconButton glyph="☰" label="Your orders" onPress={() => router.push('/my-orders')} />
+            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+              <NotificationBell count={unreadCount} />
+              <IconButton
+                glyph="☰"
+                label="Your orders"
+                onPress={() => router.push('/my-orders')}
+              />
+            </View>
           }
         />
 
@@ -187,6 +199,59 @@ export default function StudentHome() {
         />
       )}
     </Screen>
+  );
+}
+
+/**
+ * The bell, with the unread count sitting on it.
+ *
+ * The count is in the button's own accessibility label rather than announced as a
+ * loose number, and the badge itself is hidden — the same treatment the counter's
+ * tab badges get. Nothing is shown at zero: a badge reading "0" is a thing to read
+ * that says there is nothing to read.
+ */
+function NotificationBell({ count }: { count: number }) {
+  const t = useTheme();
+
+  return (
+    <View>
+      <IconButton
+        glyph="◔"
+        label={count > 0 ? `Notifications, ${count} unread` : 'Notifications'}
+        onPress={() => router.push('/inbox')}
+      />
+      {count > 0 ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            position: 'absolute',
+            top: -2,
+            right: -2,
+            minWidth: 18,
+            height: 18,
+            paddingHorizontal: 4,
+            borderRadius: t.radius.pill,
+            backgroundColor: t.color.danger,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 2,
+            borderColor: t.color.background,
+          }}
+        >
+          <Text
+            style={{
+              color: t.color.onPrimary,
+              fontSize: 10,
+              fontWeight: '700',
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {count > 9 ? '9+' : count}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 

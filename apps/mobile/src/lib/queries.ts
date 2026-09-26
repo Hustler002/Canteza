@@ -17,6 +17,7 @@ import {
   listCanteenMenu,
   listCanteenOrders,
   listCanteenStats,
+  countUnreadNotifications,
   listCanteens,
   listCoupons,
   listCompletedDeliveries,
@@ -25,6 +26,9 @@ import {
   listHostels,
   listMenu,
   listMyOrders,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   listTickets,
   orderFilters,
   placeOrder,
@@ -34,6 +38,7 @@ import {
   removeFavorite,
   saveDefaultAddress,
   setOnline,
+  subscribeToNotifications,
   subscribeToOrders,
   summariseDeliveries,
   transitionOrder,
@@ -243,6 +248,75 @@ export function useSaveDefaultAddress(userId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
     },
   });
+}
+
+/* ------------------------------------------------------------- notifications */
+
+export function useNotifications(userId: string) {
+  return useQuery({
+    queryKey: queryKeys.notifications(userId),
+    queryFn: () => listNotifications(supabase),
+    enabled: Boolean(userId),
+  });
+}
+
+/**
+ * The unread badge.
+ *
+ * Its own query rather than a filter over `useNotifications`, because a badge is one
+ * integer and the list is fifty rows with an embedded order each — and the home
+ * screen wants the badge without ever opening the inbox.
+ */
+export function useUnreadNotificationCount(userId: string) {
+  return useQuery({
+    queryKey: [...queryKeys.notifications(userId), 'unread'],
+    queryFn: () => countUnreadNotifications(supabase),
+    enabled: Boolean(userId),
+  });
+}
+
+function useNotificationInvalidation() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: invalidationRoots.notifications });
+  };
+}
+
+export function useMarkNotificationRead() {
+  const invalidate = useNotificationInvalidation();
+  return useMutation({
+    mutationFn: (notificationId: string) => markNotificationRead(supabase, notificationId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const invalidate = useNotificationInvalidation();
+  return useMutation({
+    mutationFn: () => markAllNotificationsRead(supabase),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Live inbox, the same contract as `useOrdersRealtime`: the event says "something
+ * changed" and the query refetches. Nothing is patched from the payload, so a
+ * dropped socket degrades to ordinary refetching rather than a stale badge.
+ */
+export function useNotificationsRealtime(userId: string) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeToNotifications(supabase, {
+      userId,
+      onChange: () => {
+        void queryClient.invalidateQueries({ queryKey: invalidationRoots.notifications });
+      },
+    });
+    // `queryClient` comes from context and is stable, so this subscribes once per
+    // user rather than tearing the channel down on every render.
+  }, [userId, queryClient]);
 }
 
 /* ------------------------------------------------------------------ delivery */

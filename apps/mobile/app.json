@@ -10,6 +10,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "edu.campus.canteza",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -26,7 +27,12 @@
     "scheme": "canteza",
     "extra": {
       "supabaseUrl": "$SUPABASE_URL",
-      "supabaseAnonKey": "$SUPABASE_ANON_KEY"
-    }
+      "supabaseAnonKey": "$SUPABASE_ANON_KEY",
+      "router": {},
+      "eas": {
+        "projectId": "51fd4efa-7493-4340-a088-b51dc3f9627c"
+      }
+    },
+    "owner": "canteza"
   }
 }

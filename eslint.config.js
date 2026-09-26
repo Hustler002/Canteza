@@ -31,6 +31,18 @@ export default tseslint.config(
     rules: { 'no-console': 'off' },
   },
   {
+    // Supabase Edge Function entrypoints run on **Deno**, not Node: they import from
+    // `jsr:` and `https:` specifiers and use the `Deno` global, none of which the
+    // TypeScript resolver here can see. Linting them would report a wall of phantom
+    // errors about a runtime this config knows nothing about.
+    //
+    // Only the entrypoints. `functions/_shared/**` is deliberately *not* ignored —
+    // it is plain Web Crypto TypeScript that runs in both runtimes, it is imported by
+    // `supabase/test/razorpay-signature.test.ts`, and it is the file guarding the
+    // money, so it gets the same linting and typechecking as everything else.
+    ignores: ['supabase/functions/*/index.ts'],
+  },
+  {
     // CommonJS build config that Metro and Babel load directly, not through the bundler.
     files: ['apps/*/metro.config.js', 'apps/*/babel.config.js'],
     languageOptions: {

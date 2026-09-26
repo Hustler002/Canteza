@@ -8,10 +8,12 @@
 
 ## Where the project is right now
 
-**Phase 7 complete.** 331 tests green offline, plus 64/64 live checks
+**Phase 8 started.** 371 tests green offline, plus 78/78 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
-management, order history and engagement. Every admin page has been driven in a
-browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
+management, order history, engagement, canteen stats, the notification inbox and the
+payment infrastructure. **The in-app inbox and the whole Razorpay server side are done;
+the native checkout, push, Sentry and deploy are blocked on accounts and an EAS
+development build — see "Phase 8 — where it actually stands" below.**
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -25,7 +27,7 @@ browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
 ✅ Phase 5  delivery queue, claim, pickup, deliver, shift toggle, record + 17 tests
 ✅ Phase 6  admin: orders, canteens, staff, accounts, hostels, revenue + 99
 ✅ Phase 7  menu, history, ratings, reorder, favourites, coupons, support
-⬜ Phase 8  push, Razorpay, Sentry, deploy                          ← NEXT
+🔶 Phase 8  inbox + Razorpay backend done; checkout, push, Sentry, deploy  ← IN PROGRESS
 ```
 
 Full plan: [`docs/roadmap.md`](./docs/roadmap.md).
@@ -87,26 +89,28 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 ### `supabase/` — the database
 
-| File                                 | Holds                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------ |
-| `..._schema.sql`                     | 19 tables, indexes, `canteens_public` view, `order_transitions` table    |
-| composite FK                         | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`        |
-| `..._rls.sql`                        | RLS helpers, policies, column-level grants, realtime                     |
-| `..._functions.sql`                  | `place_order`, `transition_order`, `claim_delivery`, `release_delivery`  |
-| `..._student_default_address.sql`    | `profiles.default_hostel_id/block/room`, all-or-nothing                  |
-| `..._delivery_shift_toggle.sql`      | `is_online` gates the queue and claiming; `OFF_SHIFT` error              |
-| `..._harden_default_privileges.sql`  | **Security.** Revokes Supabase's blanket grants, restates the real ones  |
-| `..._admin_set_partner_active.sql`   | Admin ends or restores a delivery posting; canteen id is explicit        |
-| `..._canteen_column_grants.sql`      | **Security.** Staff write hours + pause only; admin writes via RPC       |
-| `..._canteen_create.sql`             | `admin_create_canteen`; canteens lose client INSERT and DELETE           |
-| `..._canteen_staff_attach.sql`       | Attach/detach staff; writes the role with the row. RPC-only table        |
-| `..._delivery_partner_guards.sql`    | Onboarding works on a disabled canteen; refuses counter staff            |
-| `..._profiles_and_hostels_admin.sql` | `admin_set_profile_active`; no self-demotion; hostels lose DELETE        |
-| `..._revenue_view.sql`               | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it          |
-| `..._service_role_grants.sql`        | **Security.** States what service_role may do; nothing granted it before |
-| `seed.sql`                           | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings       |
-| `seed-users.mjs`                     | Accounts via the Auth API, then demo orders through the real RPCs        |
-| `test/`                              | 173 tests on in-process Postgres — see `test/README.md`                  |
+| File                                 | Holds                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `..._schema.sql`                     | 19 tables, indexes, `canteens_public` view, `order_transitions` table     |
+| composite FK                         | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`         |
+| `..._rls.sql`                        | RLS helpers, policies, column-level grants, realtime                      |
+| `..._functions.sql`                  | `place_order`, `transition_order`, `claim_delivery`, `release_delivery`   |
+| `..._student_default_address.sql`    | `profiles.default_hostel_id/block/room`, all-or-nothing                   |
+| `..._delivery_shift_toggle.sql`      | `is_online` gates the queue and claiming; `OFF_SHIFT` error               |
+| `..._harden_default_privileges.sql`  | **Security.** Revokes Supabase's blanket grants, restates the real ones   |
+| `..._admin_set_partner_active.sql`   | Admin ends or restores a delivery posting; canteen id is explicit         |
+| `..._canteen_column_grants.sql`      | **Security.** Staff write hours + pause only; admin writes via RPC        |
+| `..._canteen_create.sql`             | `admin_create_canteen`; canteens lose client INSERT and DELETE            |
+| `..._canteen_staff_attach.sql`       | Attach/detach staff; writes the role with the row. RPC-only table         |
+| `..._delivery_partner_guards.sql`    | Onboarding works on a disabled canteen; refuses counter staff             |
+| `..._profiles_and_hostels_admin.sql` | `admin_set_profile_active`; no self-demotion; hostels lose DELETE         |
+| `..._revenue_view.sql`               | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it           |
+| `..._service_role_grants.sql`        | **Security.** States what service_role may do; nothing granted it before  |
+| `..._canteen_stats.sql`              | Ratings + median kitchen minutes. NOT security_invoker, on purpose        |
+| `..._razorpay_payments.sql`          | `record_payment_result`, `begin_razorpay_payment`, `expire_unpaid_orders` |
+| `seed.sql`                           | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings        |
+| `seed-users.mjs`                     | Accounts via the Auth API, then demo orders through the real RPCs         |
+| `test/`                              | 173 tests on in-process Postgres — see `test/README.md`                   |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -138,11 +142,67 @@ npm run db:start       # supabase start          (needs Docker)
 npm run db:reset       # re-apply migrations + seed.sql
 npm run db:seed:users  # demo accounts + demo orders (needs a running Supabase)
 npm run db:types       # regenerate database.types.ts from the migrations (no Docker)
-npm run verify:live    # 64 checks on the live project: auth, realtime, order path, RLS
+npm run verify:live    # 78 checks on the live project: auth, realtime, order path, RLS
 npm run dev:mobile     # expo start
 npm run dev:admin      # next dev
 npm run db:push        # deploy migrations to the linked project
 ```
+
+## Phase 8 — where it actually stands
+
+**Started. The in-app notification inbox is done and proven live (§9).** The rest is
+blocked on things only an account holder can supply, and it is worth knowing which,
+because the order is forced rather than chosen:
+
+| Track        | State           | Blocked on                                                                                                                                           |
+| ------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-app inbox | ✅ done         | —                                                                                                                                                    |
+| Expo push    | ⬜ blocked      | **A development build.** Expo's docs: remote push "is unavailable in Expo Go on Android from SDK 53". Also needs FCM credentials and an Expo account |
+| Razorpay     | 🔶 backend done | **Server side complete, tested and live-verified (§10).** The native checkout needs a dev build and a Razorpay account                               |
+| Sentry       | ⬜ blocked      | A DSN, and `@sentry/react-native` is native, so a dev build again                                                                                    |
+| EAS / Vercel | ⬜ blocked      | Expo and Vercel accounts                                                                                                                             |
+| CI           | ✅ done         | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                       |
+
+**The fork worth deciding before the rest:** push, Sentry and EAS all need a
+development build rather than Expo Go, so they are one decision, not three. Nothing
+among them can be tested on a device until it is made.
+
+### Razorpay: what is proven and what is not
+
+**Proven.** `record_payment_result` is the only path to a successful payment, and it is
+idempotent on `provider_payment_id`, refuses a correctly-addressed webhook carrying the
+wrong amount, and refuses a move the payment state machine does not define. Signature
+verification is tested against digests computed independently with Node's `createHmac`
+rather than with the module under test — a verifier checked against itself proves only
+that it agrees with itself. `expire_unpaid_orders()` closes ADR 006's open gap. All of
+it ran against the live project end to end: place a prepaid order, watch the canteen be
+refused, record the webhook, watch the canteen be allowed.
+
+**Not proven, and must not be described as such.** The Deno runtime, the deployment,
+and any real Razorpay traffic. `verify-payment/index.ts` has never executed — the
+webhook test mirrors its logic in Node rather than running it. And the native checkout
+does not exist at all yet: it needs an EAS development build and a Razorpay account.
+
+**Two signatures, not one, and they are not interchangeable.** The webhook is
+`HMAC_SHA256(raw_body, WEBHOOK_SECRET)`; the checkout callback is
+`HMAC_SHA256(order_id + "|" + payment_id, KEY_SECRET)`. ADR 006 documented only the
+second. The raw body matters: `await req.json()` re-orders keys and the signature stops
+matching, which Razorpay's own docs warn about. See `supabase/functions/README.md`.
+
+**The inbox needed no migration.** Everything was already there and unused:
+`notify_order` writing a row per transition, `notifications_own` scoping reads,
+`grant update (read_at)` allowing exactly one column to be written, and
+`notifications` already a member of the `supabase_realtime` publication. Phase 8's
+first piece was a reader, not a schema change.
+
+**The row stores no text** — `(audience, status, order_id)` — and the wording comes
+from `orderNotification()` in `packages/shared`, which is the same function push will
+call. That is why rewording a message needs no migration and no backfill, and why the
+two surfaces cannot drift.
+
+`(student)/inbox.tsx`, not `notifications.tsx`: rule 19 again. A future
+`(canteen)/notifications.tsx` would resolve to the same `/notifications` and one would
+silently shadow the other.
 
 ## The mobile design system
 
@@ -303,6 +363,29 @@ that belongs in a bundle.
     waiting to happen.
 18. **Action buttons come from `nextStatusesFor(status, actor)`**, never a hand-written
     list, so a screen cannot offer a move the database would refuse.
+    18a. **Never navigate during render, and never key that navigation on data a
+    successful action mutates.** `router.replace`/`push` belongs in an event
+    handler or a `useEffect`, never in the body of a component — it updates the
+    navigation container mid-render and React 19 reports "Cannot update a component
+    while rendering a different component". `checkout.tsx` redirected an empty cart
+    this way from Phase 4 and **Expo Go never surfaced it**; the development build
+    reported it on the first open.
+
+    The same line had a second, quieter symptom: `submit()` clears the cart on its way
+    to the order tracker, so **any** guard that watches the cart — the render-time one,
+    or an effect keyed on `[cartEmpty]` — sees it empty and replaces the tracker with
+    the home screen. A student places a real order and never sees it. The guard now
+    reads `useCart.getState()` inside an effect with an empty dependency array, so
+    nothing watches the cart after mount and clearing it cannot navigate at all.
+    **Prefer removing the race to winning it.**
+
+    A debugging lesson came with it, worth more than the fix: three rounds were spent
+    reasoning about React batching and ref timing to explain why a fix "did not work"
+    on the device, when the device had simply never loaded it — a development build
+    serves a cached bundle until it is reloaded. **Before theorising about why a fix
+    failed, prove the fix is running.** A single `console.warn` at the top of the
+    changed function settles in seconds what an hour of reading cannot.
+
 19. **Route groups do not appear in the URL.** `app/(student)/home.tsx` is `/home`.
     Give each role group a distinct filename — three `index.tsx` files would all
     resolve to `/`.
@@ -341,14 +424,13 @@ Departures from the original brief, all argued in the ADRs:
 
 ## Known gaps
 
-- **No timeout on unpaid prepaid orders.** `pending -> accepted` is blocked until payment
-  is `success`, but nothing cancels an order the student abandoned at the payment screen;
-  it needs a scheduled job and lands with Razorpay in Phase 8.
+- **The unpaid-order sweep exists but is not scheduled.** `expire_unpaid_orders()` is
+  written and tested; `pg_cron` is an extension a project enables rather than something
+  a migration should assume, so until it is scheduled the function simply never runs.
+  See `supabase/functions/README.md`. Untidy rather than unsafe — `transition_order`
+  still refuses to let a canteen accept an unpaid order.
 - **No admin page for coupons.** `coupons_admin` lets an admin do anything to the table
   and nothing in the dashboard does; codes are created in SQL. A page, no migration.
-- **Nothing reads `notifications`.** `notify_order` writes a row per transition and
-  `keys.ts` reserves the query key, but there is no API function and no inbox. Phase 8
-  covers _push_; the in-app list is unowned.
 - **No student search.** context.md §2 promises browse **and search**; `home.tsx` lists
   canteens with no search input, and there is no cross-canteen dish search.
 - **The mobile app has never run against the live project.** Every admin page has now
@@ -392,7 +474,7 @@ way, so going off shift cannot strand food someone is carrying.
 ## Verifying against a real database
 
 **This has been done.** A hosted project is linked by `.env` (gitignored), the schema and
-seed are pushed, and `npm run verify:live` passes 64/64. Re-run it after any migration.
+seed are pushed, and `npm run verify:live` passes 78/78. Re-run it after any migration.
 
 `scripts/verify-live.mjs` uses the **anon key and real sign-ins only** — never the service
 role key, because a script that can bypass RLS cannot test it. That is the difference from

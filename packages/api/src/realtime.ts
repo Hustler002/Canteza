@@ -48,3 +48,35 @@ export const orderFilters = {
   forCanteen: (canteenId: string) => `canteen_id=eq.${canteenId}`,
   byId: (orderId: string) => `id=eq.${orderId}`,
 } as const;
+
+/**
+ * The same contract for the notification inbox.
+ *
+ * `notifications` is already a member of the `supabase_realtime` publication (see the
+ * RLS migration), so this needs no schema change — and because realtime applies the
+ * same policies as a query, a subscription filtered to one user cannot deliver
+ * anybody else's row even if the filter were wrong.
+ */
+export function subscribeToNotifications(
+  client: CampusClient,
+  {
+    userId,
+    onChange,
+    onStatus,
+  }: { userId: string; onChange: () => void; onStatus?: (connected: boolean) => void },
+): () => void {
+  const channel: RealtimeChannel = client
+    .channel(`notifications:${userId}:${Math.random().toString(36).slice(2)}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+      () => onChange(),
+    )
+    .subscribe((status) => {
+      onStatus?.(status === 'SUBSCRIBED');
+    });
+
+  return () => {
+    void client.removeChannel(channel);
+  };
+}

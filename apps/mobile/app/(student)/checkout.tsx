@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
@@ -65,10 +65,40 @@ export default function Checkout() {
    */
   const idempotencyKey = useMemo(() => randomUUID(), []);
 
-  if (!canteenId || lines.length === 0) {
-    router.replace('/');
-    return null;
-  }
+  const cartEmpty = !canteenId || lines.length === 0;
+
+  /**
+   * Arrived here with nothing to buy — decided **once, at mount**, and never again.
+   *
+   * Two bugs live at this spot, and the second is the reason this reads the store
+   * directly instead of using `cartEmpty`.
+   *
+   * The first: this used to run during render, which navigates while React is still
+   * rendering and produces "Cannot update a component while rendering a different
+   * component". Expo Go never surfaced it; the development build reported it on the
+   * first open.
+   *
+   * The second was the same root cause wearing different clothes, and is why the
+   * dependency array is empty. `submit()` clears the cart on its way to the order
+   * tracker. Any guard that *watches* the cart — the original render-time check, or
+   * an effect keyed on `[cartEmpty]` — sees it empty and replaces the tracker with
+   * the home screen, so a student places a real order and never sees it. On a device
+   * that presented as "checkout works but the order vanishes", which looks nothing
+   * like the console warning above and is the same line of code.
+   *
+   * So the values come from `getState()` rather than a subscription. Nothing here
+   * watches the cart after mount, which means clearing it cannot navigate at all —
+   * no flag that has to win a race, and no race to win. The cost is that emptying the
+   * cart elsewhere would not redirect, which is not a thing a phone can do.
+   */
+  useEffect(() => {
+    const cart = useCart.getState();
+    if (!cart.canteenId || cart.lines.length === 0) router.replace('/');
+  }, []);
+
+  // Purely visual: render nothing rather than a ₹0 checkout during the moment between
+  // `clearCart()` and the tracker appearing. This must never navigate.
+  if (cartEmpty) return null;
   if (menu.isLoading || hostels.isLoading) return <Loading label="Preparing checkout…" />;
 
   const menuById = new Map((menu.data ?? []).map((item) => [item.id, item]));
@@ -118,8 +148,12 @@ export default function Checkout() {
         }
       }
 
-      clearCart();
+      // Navigate first, then empty the cart. The guard above no longer watches the
+      // cart, so this ordering is belt to its braces rather than the fix itself —
+      // but it means that even if something here re-renders, the route has already
+      // changed and there is no checkout screen left to redirect.
       router.replace(`/order/${orderId}`);
+      clearCart();
     } catch (err) {
       setError(toAppError(err).userMessage);
     }

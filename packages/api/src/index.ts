@@ -5,5 +5,6 @@ export * from './delivery';
 export * from './engagement';
 export * from './errors';
 export * from './keys';
+export * from './notifications';
 export * from './orders';
 export * from './realtime';

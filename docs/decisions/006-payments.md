@@ -44,10 +44,25 @@ an order paid because the frontend said so.
   later. Coupling them would make both wrong.
 - **The verification seam is the whole design.** The client's Razorpay callback is treated
   as a hint that triggers a refetch — nothing more. `payments.status` is written by the
-  `verify-payment` Edge Function, which recomputes
-  `HMAC_SHA256(razorpay_order_id + "|" + razorpay_payment_id, RAZORPAY_SECRET)` and
-  compares it to the signature. The secret lives only in Edge Function environment
+  `verify-payment` Edge Function. The secret lives only in Edge Function environment
   variables; it never ships in an app bundle.
+
+  **Correction, Phase 8.** This ADR originally described one signature. There are two,
+  and they are not interchangeable — building the function revealed that the one named
+  here is the wrong one for a webhook:
+
+  - **Webhook** (what `verify-payment` actually verifies):
+    `HMAC_SHA256(raw_request_body, RAZORPAY_WEBHOOK_SECRET)`, sent in
+    `X-Razorpay-Signature`. The body must be hashed exactly as received; Razorpay's docs
+    say "Do not parse or cast the webhook request body", because a JSON round trip
+    re-orders keys and the bytes stop matching.
+  - **Checkout callback** (the hint the app receives):
+    `HMAC_SHA256(order_id + "|" + payment_id, KEY_SECRET)` — a different message _and_ a
+    different secret.
+
+  The webhook is the source of truth precisely because it arrives whether or not the app
+  is still running. A student who force-quits mid-payment produces no callback at all,
+  which is why the order flow never waits on one.
 
 ## Trade-offs
 
@@ -57,9 +72,11 @@ an order paid because the frontend said so.
 - Online payment introduces a window where the order exists but payment is unconfirmed.
   `transition_order` refuses `pending -> accepted` while a non-COD payment is not yet
   `success`, raising `PAYMENT_UNVERIFIED`, so a canteen never cooks food nobody paid for.
-  The order can still be rejected or cancelled in that state. **Still missing:** a timeout
-  that cancels orders left unpaid; it needs a scheduled job and lands with Razorpay in
-  Phase 8. Until then an abandoned prepaid order sits at `pending` until someone cancels it.
+  The order can still be rejected or cancelled in that state. **Closed in Phase 8:** `expire_unpaid_orders()`
+  cancels an order abandoned at checkout, fails its payment and releases its coupon,
+  writing the trail as actor `system`. It still has to be scheduled — see
+  `supabase/functions/README.md` — because pg_cron is a project setting rather than
+  something a migration should assume.
 - Razorpay webhooks can arrive out of order or twice. The handler is idempotent on
   `provider_payment_id`, and `canTransitionPayment` rejects illegal moves like
   `refunded → success`.

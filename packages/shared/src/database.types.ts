@@ -657,6 +657,21 @@ export type Database = {
         },
       ];
     };
+    payment_transitions: {
+      Row: {
+        from_status: string;
+        to_status: string;
+      };
+      Insert: {
+        from_status: string;
+        to_status: string;
+      };
+      Update: {
+        from_status?: string;
+        to_status?: string;
+      };
+      Relationships: [];
+    };
     payments: {
       Row: {
         id: string;
@@ -1017,6 +1032,13 @@ export type Database = {
       Args: Record<PropertyKey, never>;
       Returns: string;
     };
+    begin_razorpay_payment: {
+      Args: {
+        p_order_id: string | null;
+        p_provider_order_id: string | null;
+      };
+      Returns: undefined;
+    };
     campus_now: {
       Args: Record<PropertyKey, never>;
       Returns: string;
@@ -1033,6 +1055,12 @@ export type Database = {
         p_order_id: string | null;
       };
       Returns: string;
+    };
+    expire_unpaid_orders: {
+      Args: {
+        p_older_than?: string | null;
+      };
+      Returns: number;
     };
     is_admin: {
       Args: Record<PropertyKey, never>;
@@ -1077,6 +1105,16 @@ export type Database = {
         p_note?: string | null;
         p_coupon_code?: string | null;
         p_payment_method?: string | null;
+      };
+      Returns: string;
+    };
+    record_payment_result: {
+      Args: {
+        p_provider_order_id: string | null;
+        p_provider_payment_id: string | null;
+        p_status: string | null;
+        p_amount_paise: number | null;
+        p_failure_reason?: string | null;
       };
       Returns: string;
     };
