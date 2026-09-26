@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { OrderItem } from '@canteza/api';
 import {
   formatPaise,
@@ -35,30 +35,87 @@ export function StatusPill({ status }: { status: string }) {
   return <Badge label={label} tone={TONE[known] ?? 'neutral'} />;
 }
 
-/** The student's progress tracker. Failure states are shown as a pill, not a trail. */
+/**
+ * The student's progress tracker. Failure states are shown as a pill, not a trail.
+ *
+ * A vertical timeline rather than the segmented bar this replaced, because "step 4
+ * of 6" answers none of the three questions a waiting student actually has (§11):
+ * what happened, what is happening now, what happens next. Each step names itself,
+ * done steps are ticked, the current one is filled and bold, and the rest stay
+ * visibly ahead.
+ *
+ * The steps and their labels come from `packages/shared`, so a status added to the
+ * state machine cannot appear here as a raw database string.
+ */
 export function ProgressTrail({ status }: { status: string }) {
   const t = useTheme();
   const current = progressIndex(status as OrderStatus);
   if (current < 0) return null;
 
   return (
-    <View style={{ gap: t.space.sm }}>
-      <View style={{ flexDirection: 'row', gap: t.space.xs }}>
-        {STUDENT_PROGRESS_STEPS.map((step, index) => (
-          <View
-            key={step}
-            style={{
-              flex: 1,
-              height: 6,
-              borderRadius: t.radius.pill,
-              backgroundColor: index <= current ? t.color.primary : t.color.surfaceAlt,
-            }}
-          />
-        ))}
-      </View>
-      <Body muted>
-        Step {current + 1} of {STUDENT_PROGRESS_STEPS.length}
-      </Body>
+    <View style={{ gap: 0 }}>
+      {STUDENT_PROGRESS_STEPS.map((step, index) => {
+        const done = index < current;
+        const now = index === current;
+        const last = index === STUDENT_PROGRESS_STEPS.length - 1;
+        const reached = done || now;
+
+        return (
+          <View key={step} style={{ flexDirection: 'row', gap: t.space.md }}>
+            {/* The rail: a dot per step, joined by a line that is only coloured
+             * as far as the order has actually travelled. */}
+            <View style={{ alignItems: 'center', width: 20 }}>
+              <View
+                style={{
+                  width: now ? 16 : 12,
+                  height: now ? 16 : 12,
+                  borderRadius: t.radius.pill,
+                  borderWidth: reached ? 0 : 2,
+                  borderColor: t.color.border,
+                  backgroundColor: reached ? t.color.primary : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 2,
+                }}
+              >
+                {done ? (
+                  <Text style={{ color: t.color.onPrimary, fontSize: 8, fontWeight: '900' }}>
+                    ✓
+                  </Text>
+                ) : null}
+              </View>
+              {!last ? (
+                <View
+                  style={{
+                    flex: 1,
+                    width: 2,
+                    minHeight: t.space.xl,
+                    backgroundColor: done ? t.color.primary : t.color.border,
+                  }}
+                />
+              ) : null}
+            </View>
+
+            <View style={{ flex: 1, paddingBottom: last ? 0 : t.space.lg }}>
+              <Text
+                style={[
+                  now ? t.font.heading : t.font.body,
+                  {
+                    color: reached ? t.color.text : t.color.textMuted,
+                  },
+                ]}
+              >
+                {STUDENT_STATUS_LABEL[step]}
+              </Text>
+              {now ? (
+                <Text style={[t.font.caption, { color: t.color.primary, marginTop: 2 }]}>
+                  Happening now
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }

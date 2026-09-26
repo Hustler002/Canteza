@@ -10,6 +10,7 @@ import { unwrap, unwrapList, unwrapRequired } from './errors';
  */
 
 export type Canteen = Row<'canteens_public'>;
+export type CanteenStats = Row<'canteen_stats'>;
 export type MenuItem = Row<'menu_items'>;
 export type Category = Row<'food_categories'>;
 export type Hostel = Row<'hostels'>;
@@ -20,6 +21,20 @@ export type Hostel = Row<'hostels'>;
  */
 export async function listCanteens(client: CampusClient): Promise<Canteen[]> {
   return unwrapList(client.from('canteens_public').select('*').order('name'));
+}
+
+/**
+ * Rating and kitchen-speed stats for every active canteen.
+ *
+ * A separate read from `listCanteens` rather than extra columns on `canteens_public`,
+ * because the two have completely different shelf lives: whether a canteen is open
+ * changes at a minute boundary, while a 30-day median moves imperceptibly. Joined
+ * into one view, the cheap query would inherit the expensive one's cost on every
+ * home-screen load. Split, the stats cache for minutes (see `useCanteenStats`) and
+ * the open/closed state stays live.
+ */
+export async function listCanteenStats(client: CampusClient): Promise<CanteenStats[]> {
+  return unwrapList(client.from('canteen_stats').select('*'));
 }
 
 export async function getCanteen(client: CampusClient, canteenId: string): Promise<Canteen | null> {

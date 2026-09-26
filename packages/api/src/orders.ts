@@ -114,6 +114,40 @@ export async function getActiveOrder(client: CampusClient): Promise<OrderWithIte
  * A canteen's orders. RLS already restricts this to the caller's own canteen, so
  * the status filter is presentation, not a permission check.
  */
+/**
+ * How many orders sit at each status, for the counter's tab badges.
+ *
+ * One request, not one per tab: it selects the `status` column alone and groups the
+ * rows here. The payload is a few bytes per in-flight order, which is cheaper than
+ * four `head: true` count requests and far cheaper than fetching the orders
+ * themselves with their line items embedded.
+ *
+ * No `canteen_id` filter, exactly like `listCanteenOrders` above -- `orders_read`
+ * scopes a canteen account to its own canteen, so a filter here would be a second
+ * copy of a rule the database already enforces (rule 15).
+ *
+ * Only pass live statuses. A lifetime count of everything ever delivered grows
+ * without bound, costs more to fetch every render, and tells the counter nothing
+ * they can act on.
+ */
+export async function countOrdersByStatus(
+  client: CampusClient,
+  statuses: readonly OrderStatus[],
+): Promise<Record<string, number>> {
+  const rows = await unwrapList(
+    client
+      .from('orders')
+      .select('status')
+      .in('status', statuses as unknown as string[]),
+  );
+
+  const counts: Record<string, number> = {};
+  for (const row of rows as Array<{ status: string }>) {
+    counts[row.status] = (counts[row.status] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function listCanteenOrders(
   client: CampusClient,
   statuses: readonly OrderStatus[],

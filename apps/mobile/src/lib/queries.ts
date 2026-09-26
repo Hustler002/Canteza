@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addFavorite,
   claimDelivery,
+  countOrdersByStatus,
   createMenuItem,
   createReview,
   createTicket,
@@ -15,6 +16,7 @@ import {
   listActiveDeliveries,
   listCanteenMenu,
   listCanteenOrders,
+  listCanteenStats,
   listCanteens,
   listCoupons,
   listCompletedDeliveries,
@@ -54,6 +56,22 @@ export function useCanteens() {
   return useQuery({
     queryKey: queryKeys.canteens(),
     queryFn: () => listCanteens(supabase),
+  });
+}
+
+/**
+ * Ratings and kitchen speed for every canteen.
+ *
+ * Cached for ten minutes, which is the point of it being a separate query from
+ * `useCanteens`: a 30-day median does not move between two taps, while whether a
+ * canteen is open has to be current. Refetching this on every home-screen visit
+ * would pay for the expensive aggregate to learn nothing.
+ */
+export function useCanteenStats() {
+  return useQuery({
+    queryKey: queryKeys.canteenStats(),
+    queryFn: () => listCanteenStats(supabase),
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -134,6 +152,21 @@ export function useCanteenOrders(canteenId: string, statuses: readonly OrderStat
   return useQuery({
     queryKey: queryKeys.canteenOrders(canteenId, statuses.join(',')),
     queryFn: () => listCanteenOrders(supabase, statuses),
+    enabled: Boolean(canteenId),
+  });
+}
+
+/**
+ * Counts for the counter's tab badges, across every live status in one request.
+ *
+ * The key sits under the `orders` root, so the realtime subscription that already
+ * refreshes the board refreshes these too — a student placing an order bumps the
+ * "New" badge with no extra socket and no polling.
+ */
+export function useCanteenOrderCounts(canteenId: string, statuses: readonly OrderStatus[]) {
+  return useQuery({
+    queryKey: queryKeys.canteenOrderCounts(canteenId),
+    queryFn: () => countOrdersByStatus(supabase, statuses),
     enabled: Boolean(canteenId),
   });
 }

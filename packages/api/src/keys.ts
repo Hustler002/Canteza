@@ -11,6 +11,8 @@ export const queryKeys = {
 
   canteens: () => ['canteens'] as const,
   canteen: (canteenId: string) => ['canteens', canteenId] as const,
+  /** Ratings and kitchen speed. Its own key: it is cached far longer than the list. */
+  canteenStats: () => ['canteens', 'stats'] as const,
   menu: (canteenId: string) => ['canteens', canteenId, 'menu'] as const,
   /** The counter's own view of it: retired items included, which a student never sees. */
   canteenMenu: (canteenId: string) => ['canteens', canteenId, 'menu', 'all'] as const,
@@ -29,6 +31,13 @@ export const queryKeys = {
     status
       ? (['orders', 'canteen', canteenId, status] as const)
       : (['orders', 'canteen', canteenId] as const),
+
+  /**
+   * Per-status counts for the counter's tab badges. Nested under `orders`, so the
+   * realtime handler's existing invalidation of that root refreshes the badges
+   * along with the list — a new order bumps the count without its own subscription.
+   */
+  canteenOrderCounts: (canteenId: string) => ['orders', 'canteen', canteenId, 'counts'] as const,
 
   /** A partner's own canteen's unclaimed ready queue, and their own assignments. */
   deliveryQueue: () => ['orders', 'delivery', 'queue'] as const,

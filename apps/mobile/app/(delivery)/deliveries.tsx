@@ -65,7 +65,7 @@ export default function Deliveries() {
     <Screen padded={false}>
       <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Heading level="display">Deliveries</Heading>
+          <Heading level="title">Deliveries</Heading>
           <View style={{ flexDirection: 'row', gap: t.space.sm }}>
             <Button label="Record" variant="secondary" onPress={() => router.push('/history')} />
             <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />

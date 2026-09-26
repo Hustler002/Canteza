@@ -14,7 +14,53 @@ export const PLATFORM_DEFAULTS = {
    * own delivery staff. Deliberately small — canteens need to profit first.
    */
   platformFeePaise: 200, // ₹2 of the ₹10 delivery fee
+
+  /**
+   * The walk from a counter to a hostel room. A constant because campus is small and
+   * every leg is comparable -- there is no traffic to model and no distance matrix to
+   * buy. If the platform ever serves a campus where that stops being true, this is
+   * where it becomes per-hostel.
+   */
+  deliveryMinutes: 10,
+  /**
+   * What to quote before a canteen has cooked enough orders to have a median of its
+   * own, and the floor under any quote. A new canteen showing no ETA at all reads as
+   * broken; one quoting two minutes reads as a lie.
+   */
+  defaultPrepMinutes: 15,
+  /**
+   * Below this many timed orders, `canteen_stats.median_prep_minutes` is ignored in
+   * favour of the default. A median of three orders is an anecdote.
+   */
+  minPrepSampleSize: 5,
 } as const;
+
+/**
+ * Door-to-door minutes to quote for a canteen: how long the kitchen actually takes,
+ * plus the walk.
+ *
+ * The median comes from `canteen_stats`, which measures accepted -> ready over the
+ * last 30 days, so a canteen that speeds up is quoted faster without anyone editing a
+ * setting. Too few samples, or none, falls back to the platform default rather than
+ * quoting a number built from two orders.
+ *
+ * Rounded up to the nearest five, because "about 25 minutes" is how anyone says this
+ * out loud and a quote of 23 implies a precision that no kitchen has.
+ */
+export function estimatedMinutes(
+  medianPrepMinutes: number | null | undefined,
+  sampleSize: number | null | undefined,
+): number {
+  const trusted =
+    typeof medianPrepMinutes === 'number' &&
+    medianPrepMinutes > 0 &&
+    (sampleSize ?? 0) >= PLATFORM_DEFAULTS.minPrepSampleSize;
+
+  const prep = trusted ? medianPrepMinutes : PLATFORM_DEFAULTS.defaultPrepMinutes;
+  const total = prep + PLATFORM_DEFAULTS.deliveryMinutes;
+
+  return Math.ceil(total / 5) * 5;
+}
 
 /**
  * One campus, one timezone. Mirrors `campus_now()` in the schema, which states it in

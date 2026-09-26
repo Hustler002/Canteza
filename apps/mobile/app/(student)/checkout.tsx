@@ -32,6 +32,7 @@ import {
   Screen,
 } from '../../src/components/ui';
 import { MoneyRow } from '../../src/components/order';
+import { AppBar, Chip } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 export default function Checkout() {
@@ -125,9 +126,30 @@ export default function Checkout() {
   }
 
   return (
-    <Screen scroll>
-      <Button label="← Back" variant="secondary" onPress={() => router.back()} />
-      <Heading level="display">Checkout</Heading>
+    <Screen
+      scroll
+      footer={
+        <>
+          <FormError message={error} />
+          {!addressComplete ? <Body muted>Pick a hostel, block and room to continue.</Body> : null}
+          {/*
+           * The total rides on the button and the button is always on screen, so it
+           * stays visible however far down the form the student has scrolled (§10).
+           */}
+          <Button
+            label={`Place order · ${formatPaise(totals.totalPaise)}`}
+            onPress={submit}
+            loading={place.isPending}
+            disabled={!addressComplete}
+          />
+        </>
+      }
+    >
+      <AppBar
+        title="Checkout"
+        subtitle={canteen.data?.name ?? undefined}
+        onBack={() => router.back()}
+      />
 
       <Card>
         <Heading level="heading">Deliver to</Heading>
@@ -135,7 +157,7 @@ export default function Checkout() {
         <Body muted>Hostel</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
           {(hostels.data ?? []).map((h) => (
-            <Choice
+            <Chip
               key={h.id}
               label={h.name}
               selected={h.id === hostelId}
@@ -152,7 +174,7 @@ export default function Checkout() {
             <Body muted>Block</Body>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
               {blocks.map((b) => (
-                <Choice key={b} label={b} selected={b === block} onPress={() => setBlock(b)} />
+                <Chip key={b} label={b} selected={b === block} onPress={() => setBlock(b)} />
               ))}
             </View>
           </>
@@ -205,7 +227,7 @@ export default function Checkout() {
         {(coupons.data ?? []).length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
             {(coupons.data ?? []).map((available) => (
-              <Choice
+              <Chip
                 key={available.id}
                 label={
                   available.min_order_paise > 0
@@ -221,52 +243,12 @@ export default function Checkout() {
       </Card>
 
       <Card>
-        <Heading level="heading">{canteen.data?.name}</Heading>
+        <Heading level="heading">Payment</Heading>
         <MoneyRow label="Subtotal" amountPaise={totals.subtotalPaise} />
         <MoneyRow label="Delivery" amountPaise={totals.deliveryFeePaise} />
         <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
         <Badge label="Pay cash on delivery" tone="info" />
       </Card>
-
-      <FormError message={error} />
-
-      <Button
-        label={`Place order · ${formatPaise(totals.totalPaise)}`}
-        onPress={submit}
-        loading={place.isPending}
-        disabled={!addressComplete}
-      />
-      {!addressComplete ? <Body muted>Pick a hostel, block and room to continue.</Body> : null}
     </Screen>
-  );
-}
-
-function Choice({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const t = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      style={({ pressed }) => ({
-        paddingHorizontal: t.space.lg,
-        paddingVertical: t.space.md,
-        borderRadius: t.radius.pill,
-        borderWidth: 1,
-        borderColor: selected ? t.color.primary : t.color.border,
-        backgroundColor: selected ? t.color.primarySoft : 'transparent',
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <Body>{label}</Body>
-    </Pressable>
   );
 }

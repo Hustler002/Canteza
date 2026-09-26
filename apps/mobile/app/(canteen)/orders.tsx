@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, View } from 'react-native';
+import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@canteza/shared';
 import {
   orderFilters,
+  useCanteenOrderCounts,
   useCanteenOrders,
   useOrdersRealtime,
   useTransitionOrder,
@@ -28,6 +29,7 @@ import {
   Screen,
 } from '../../src/components/ui';
 import { OrderLines, StatusPill } from '../../src/components/order';
+import { AppBar, IconButton } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -46,6 +48,16 @@ const TABS: Array<{ key: string; label: string; statuses: readonly OrderStatus[]
   { key: 'done', label: 'Done', statuses: ['delivered', 'cancelled', 'rejected'] },
 ];
 
+/**
+ * The statuses whose counts are worth fetching: every live one, in a single query.
+ *
+ * "Done" is deliberately not counted. It is every order this canteen has ever
+ * finished, so the number grows without bound, costs more to fetch the longer the
+ * canteen has been open, and tells the counter nothing they can act on. A badge is
+ * there to say "look here now".
+ */
+const COUNTED_STATUSES = TABS.filter((tab) => tab.key !== 'done').flatMap((tab) => tab.statuses);
+
 const ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
   accepted: 'Accept',
   rejected: 'Reject',
@@ -63,6 +75,9 @@ export default function CanteenOrders() {
 
   const canteenId = identity.canteenId ?? '';
   const orders = useCanteenOrders(canteenId, tab.statuses);
+  // One request for every live tab's badge. Keyed under the `orders` root, so the
+  // realtime subscription below refreshes the counts as well as the list.
+  const counts = useCanteenOrderCounts(canteenId, COUNTED_STATUSES).data ?? {};
   useOrdersRealtime(canteenId ? orderFilters.forCanteen(canteenId) : null);
 
   if (isAwaitingOnboarding(identity)) {
@@ -80,33 +95,98 @@ export default function CanteenOrders() {
   return (
     <Screen padded={false}>
       <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Heading level="display">Orders</Heading>
-          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-            <Button label="Menu" variant="secondary" onPress={() => router.push('/menu')} />
-            <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
-          </View>
-        </View>
+        <AppBar
+          title="Orders"
+          subtitle="Live — new orders arrive on their own"
+          right={
+            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+              <IconButton glyph="☰" label="Menu" onPress={() => router.push('/menu')} />
+              <IconButton glyph="⏻" label="Sign out" onPress={() => void signOut()} />
+            </View>
+          }
+        />
 
+        {/*
+         * The service board's tab bar. Full-width segments with a 48pt target,
+         * because this is tapped with a thumb over a hot counter (§14).
+         *
+         * The selected label reads `onPrimary`, not the default text colour: it sits
+         * on the primary fill, and the old default put near-black on orange, which
+         * is the one combination in this palette that fails contrast.
+         */}
         <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-          {TABS.map((item) => (
-            <Pressable
-              key={item.key}
-              onPress={() => setTab(item)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: item.key === tab.key }}
-              style={({ pressed }) => ({
-                flex: 1,
-                paddingVertical: t.space.md,
-                borderRadius: t.radius.md,
-                alignItems: 'center',
-                backgroundColor: item.key === tab.key ? t.color.primary : t.color.surfaceAlt,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Body>{item.label}</Body>
-            </Pressable>
-          ))}
+          {TABS.map((item) => {
+            const selected = item.key === tab.key;
+            // Undefined for "Done", which is not counted, and 0 for a live tab with
+            // nothing in it. Only a non-zero count earns a badge: a row of zeroes is
+            // four things to read that all say "nothing here".
+            const count = item.statuses.reduce<number | undefined>((sum, status) => {
+              if (!COUNTED_STATUSES.includes(status)) return sum;
+              return (sum ?? 0) + (counts[status] ?? 0);
+            }, undefined);
+
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setTab(item)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                accessibilityLabel={
+                  count ? `${item.label}, ${count} order${count === 1 ? '' : 's'}` : item.label
+                }
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minHeight: t.minTouchTarget,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: t.space.xs,
+                  borderRadius: t.radius.md,
+                  backgroundColor: selected ? t.color.primary : t.color.surfaceAlt,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    t.font.label,
+                    { color: selected ? t.color.onPrimary : t.color.textMuted },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+
+                {count ? (
+                  <View
+                    // The count is already in the tab's accessibility label above, so
+                    // the badge itself is hidden from a screen reader rather than
+                    // being announced a second time as a bare number.
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                    style={{
+                      minWidth: 20,
+                      paddingHorizontal: 5,
+                      height: 20,
+                      borderRadius: t.radius.pill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: selected ? t.color.onPrimary : t.color.primary,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '700',
+                        fontVariant: ['tabular-nums'],
+                        color: selected ? t.color.primary : t.color.onPrimary,
+                      }}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 

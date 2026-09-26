@@ -5,7 +5,6 @@ import { useDeliveryHistory } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
 import {
   Body,
-  Button,
   Card,
   EmptyState,
   ErrorState,
@@ -13,6 +12,7 @@ import {
   Loading,
   Screen,
 } from '../../src/components/ui';
+import { AppBar } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -43,12 +43,11 @@ export default function DeliveryHistory() {
   return (
     <Screen padded={false}>
       <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
-        <Button
-          label="← Deliveries"
-          variant="secondary"
-          onPress={() => router.replace('/deliveries')}
+        <AppBar
+          title="Your record"
+          subtitle="Every delivery you have completed"
+          onBack={() => router.replace('/deliveries')}
         />
-        <Heading level="display">Your record</Heading>
 
         <View style={{ flexDirection: 'row', gap: t.space.md }}>
           <Stat label="Today" value={String(stats?.today ?? 0)} />

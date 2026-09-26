@@ -12,14 +12,12 @@ import {
 import {
   orderFilters,
   useCreateReview,
-  useMenu,
   useOrder,
   useOrderReview,
   useOrdersRealtime,
   useTransitionOrder,
 } from '../../../src/lib/queries';
 import { useIdentity } from '../../../src/lib/session';
-import { useCart } from '../../../src/store/cart';
 import {
   Badge,
   Body,
@@ -34,6 +32,8 @@ import {
   Screen,
 } from '../../../src/components/ui';
 import { MoneyRow, OrderLines, ProgressTrail, StatusPill } from '../../../src/components/order';
+import { AppBar, SectionHeader } from '../../../src/components/patterns';
+import { ReorderButton } from '../../../src/components/reorder';
 import { useTheme } from '../../../src/theme';
 
 /**
@@ -64,7 +64,7 @@ export default function OrderTracker() {
   if (!order.data) {
     return (
       <Screen>
-        <Button label="← Back" variant="secondary" onPress={() => router.replace('/')} />
+        <AppBar title="Order" onBack={() => router.replace('/')} />
         <EmptyState title="Order not found" body="It may belong to another account." />
       </Screen>
     );
@@ -96,15 +96,12 @@ export default function OrderTracker() {
 
   return (
     <Screen scroll>
-      <Button label="← Home" variant="secondary" onPress={() => router.replace('/')} />
-
-      <View style={{ gap: t.space.sm }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Heading level="display">{data.code}</Heading>
-          <StatusPill status={data.status} />
-        </View>
-        <Body muted>{data.canteen_name_snapshot}</Body>
-      </View>
+      <AppBar
+        title={data.code}
+        subtitle={data.canteen_name_snapshot ?? undefined}
+        onBack={() => router.replace('/')}
+        right={<StatusPill status={data.status} />}
+      />
 
       {!isTerminal(status) ? (
         <Card>
@@ -112,10 +109,16 @@ export default function OrderTracker() {
         </Card>
       ) : null}
 
+      {/*
+       * The destination, said the way a delivery partner would read it aloud and
+       * big enough to check from across a room (§11). It stays above the receipt
+       * because "where is it going" is asked far more often than "what did it cost".
+       */}
       <Card>
-        <Heading level="heading">Delivering to</Heading>
+        <SectionHeader title="Delivering to" />
+        <Heading level="heading">{data.hostel_label}</Heading>
         <Body>
-          {data.hostel_label}, Block {data.block}, Room {data.room}
+          Block {data.block} · Room {data.room}
         </Body>
         {data.delivery_note ? <Body muted>“{data.delivery_note}”</Body> : null}
       </Card>
@@ -193,8 +196,11 @@ function RateCard({ order }: { order: OrderWithItems }) {
 
   if (review.data) {
     return (
+      // The card swapping to this IS the success feedback (§13): the rating cannot
+      // be sent twice, so a dismissible toast would vanish and leave the student
+      // wondering whether it saved. This persists.
       <Card>
-        <Heading level="heading">You rated this</Heading>
+        <Badge label="✓ Thanks — rating saved" tone="success" />
         <Body>{'★'.repeat(review.data.food_rating)} food</Body>
         {review.data.delivery_rating ? (
           <Body>{'★'.repeat(review.data.delivery_rating)} delivery</Body>
@@ -301,43 +307,3 @@ function Stars({
  * at all. Sold-out ones are dropped for a softer reason -- carrying one into a cart that
  * will refuse to check out is worse than saying so here.
  */
-function ReorderButton({ order }: { order: OrderWithItems }) {
-  const menu = useMenu(order.canteen_id);
-  const { clear, add } = useCart();
-
-  if (menu.isLoading) return null;
-
-  const orderable = new Set(
-    (menu.data ?? []).filter((item) => item.is_available).map((item) => item.id),
-  );
-  const lines = (order.order_items ?? []).filter(
-    (item) => item.menu_item_id && orderable.has(item.menu_item_id),
-  );
-  const dropped = (order.order_items ?? []).length - lines.length;
-
-  if (lines.length === 0) {
-    return <Body muted>Nothing from this order is on the menu right now.</Body>;
-  }
-
-  function reorder() {
-    // Clear first: the cart belongs to one canteen, and `add` refuses to mix rather
-    // than silently dropping what was there.
-    clear();
-    for (const line of lines) {
-      if (line.menu_item_id) add(order.canteen_id, line.menu_item_id, line.quantity);
-    }
-    router.push('/cart');
-  }
-
-  return (
-    <View style={{ gap: 8 }}>
-      <Button label="Order this again" variant="secondary" onPress={reorder} />
-      <Body muted>
-        {dropped > 0
-          ? `${dropped} ${dropped === 1 ? 'dish is' : 'dishes are'} unavailable and will be left out. `
-          : ''}
-        Today's prices apply, not the ones on this receipt.
-      </Body>
-    </View>
-  );
-}

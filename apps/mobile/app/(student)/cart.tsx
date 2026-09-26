@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   BRAND,
@@ -13,17 +13,18 @@ import {
 import { useCanteen, useMenu } from '../../src/lib/queries';
 import { useCart } from '../../src/store/cart';
 import {
+  Badge,
   Body,
   Button,
   Card,
   EmptyState,
   ErrorState,
   FormError,
-  Heading,
   Loading,
   Screen,
 } from '../../src/components/ui';
 import { MoneyRow } from '../../src/components/order';
+import { AppBar, Price, QtyStepper, Thumb } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -45,8 +46,8 @@ export default function CartScreen() {
   if (!canteenId || lines.length === 0) {
     return (
       <Screen>
-        <Button label="← Back" variant="secondary" onPress={() => router.back()} />
-        <EmptyState title="Your cart is empty" body="Pick a canteen and add something." />
+        <AppBar title="Your cart" onBack={() => router.back()} />
+        <EmptyState title="Your cart is waiting" body="Pick a canteen and add something to it." />
       </Screen>
     );
   }
@@ -103,37 +104,74 @@ export default function CartScreen() {
     : null;
 
   return (
-    <Screen scroll>
-      <Button label="← Back" variant="secondary" onPress={() => router.back()} />
-
-      <View style={{ gap: t.space.xs }}>
-        <Heading level="display">Your cart</Heading>
-        <Body muted>{canteen.data?.name}</Body>
-      </View>
+    <Screen
+      scroll
+      footer={
+        <>
+          <FormError message={blocker ? blocker.userMessage : null} />
+          {/*
+           * The total lives on the button itself, so it is readable at the moment of
+           * the decision rather than needing a scroll back up to check (§10).
+           */}
+          <Button
+            label={`Checkout · ${formatPaise(totals.totalPaise)}`}
+            onPress={() => router.push('/checkout')}
+            disabled={blocker !== null}
+          />
+        </>
+      }
+    >
+      <AppBar
+        title="Your cart"
+        subtitle={canteen.data?.name ?? undefined}
+        onBack={() => router.back()}
+        right={
+          <Pressable
+            onPress={clear}
+            accessibilityRole="button"
+            accessibilityLabel="Clear cart"
+            hitSlop={t.hitSlop}
+          >
+            <Text style={[t.font.label, { color: t.color.danger }]}>Clear</Text>
+          </Pressable>
+        }
+      />
 
       <Card>
-        {resolved.map(({ line, item }) => (
-          <View key={line.itemId} style={{ gap: t.space.sm }}>
-            <View
-              style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}
-            >
-              <View style={{ flex: 1 }}>
-                <Body>{item ? item.name : 'Item no longer available'}</Body>
-                {item && !item.is_available ? <Body muted>Sold out</Body> : null}
-              </View>
-              <Body muted>{item ? formatPaise(item.price_paise * line.quantity) : '—'}</Body>
+        {resolved.map(({ line, item }, index) => (
+          <View
+            key={line.itemId}
+            style={{
+              gap: t.space.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+              // A rule between lines rather than around each: the card is already
+              // the container, so a second border per row would be noise.
+              borderTopWidth: index === 0 ? 0 : 1,
+              borderTopColor: t.color.border,
+              paddingTop: index === 0 ? 0 : t.space.md,
+            }}
+          >
+            {item ? <Thumb name={item.name} uri={item.image_url} size={48} /> : null}
+
+            <View style={{ flex: 1, gap: t.space.xs }}>
+              <Body>{item ? item.name : 'No longer on the menu'}</Body>
+              {item && !item.is_available ? (
+                <Badge label="Sold out" tone="danger" />
+              ) : item ? (
+                <Price value={formatPaise(item.price_paise)} tone="muted" />
+              ) : (
+                <Body muted>Remove it to continue</Body>
+              )}
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-              <Button
-                label="−"
-                variant="secondary"
-                onPress={() => setQuantity(line.itemId, line.quantity - 1)}
-              />
-              <Body>{line.quantity}</Body>
-              <Button
-                label="+"
-                variant="secondary"
-                onPress={() => setQuantity(line.itemId, line.quantity + 1)}
+
+            <View style={{ alignItems: 'flex-end', gap: t.space.sm }}>
+              {item ? <Price value={formatPaise(item.price_paise * line.quantity)} /> : null}
+              <QtyStepper
+                quantity={line.quantity}
+                onAdd={() => setQuantity(line.itemId, line.quantity + 1)}
+                onRemove={() => setQuantity(line.itemId, line.quantity - 1)}
+                accessibilityName={item ? item.name : 'this item'}
               />
             </View>
           </View>
@@ -144,21 +182,17 @@ export default function CartScreen() {
         <MoneyRow label="Subtotal" amountPaise={totals.subtotalPaise} />
         <MoneyRow label="Delivery" amountPaise={totals.deliveryFeePaise} />
         <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
+        {/*
+         * No surprise fees (§9). The platform fee is NOT a line here because it is
+         * not an extra charge -- it is the slice of the delivery fee above that
+         * Canteza keeps, so listing it would double-count it on the student's bill.
+         */}
         <Body muted>
-          The canteen keeps every rupee of the food.{' '}
-          {formatPaise(PLATFORM_DEFAULTS.platformFeePaise)} of the delivery fee keeps {BRAND.name}
+          Nothing else is added at checkout. The canteen keeps every rupee of the food;{' '}
+          {formatPaise(PLATFORM_DEFAULTS.platformFeePaise)} of the delivery fee keeps {BRAND.name}{' '}
           running.
         </Body>
       </Card>
-
-      <FormError message={blocker ? blocker.userMessage : null} />
-
-      <Button
-        label="Continue to checkout"
-        onPress={() => router.push('/checkout')}
-        disabled={blocker !== null}
-      />
-      <Button label="Clear cart" variant="secondary" onPress={clear} />
     </Screen>
   );
 }

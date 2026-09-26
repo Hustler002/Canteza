@@ -893,6 +893,16 @@ export type Database = {
     };
     };
     Views: {
+    canteen_stats: {
+      Row: {
+        canteen_id: string | null;
+        avg_food_rating: number | null;
+        review_count: number | null;
+        median_prep_minutes: number | null;
+        prep_sample_size: number | null;
+      };
+      Relationships: [];
+    };
     canteens_public: {
       Row: {
         id: string | null;

@@ -15,6 +15,7 @@ import {
   Loading,
   Screen,
 } from '../../src/components/ui';
+import { AppBar } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -68,8 +69,7 @@ export default function Support() {
 
   return (
     <Screen scroll>
-      <Button label="← Back" variant="secondary" onPress={() => router.back()} />
-      <Heading level="display">Help</Heading>
+      <AppBar title="Help" onBack={() => router.back()} />
 
       <Card>
         <Heading level="heading">Tell us what happened</Heading>
@@ -86,6 +86,8 @@ export default function Support() {
           onChangeText={setBody}
           placeholder="What went wrong, and what would fix it"
           multiline
+          maxLength={1000}
+          hint="An admin reads every one of these."
         />
         <FormError message={error} />
         {sent ? <Badge label="Sent — an admin will pick it up" tone="success" /> : null}

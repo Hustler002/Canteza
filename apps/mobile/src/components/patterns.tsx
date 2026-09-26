@@ -496,3 +496,50 @@ export function VegMark({ veg }: { veg: boolean }) {
     </View>
   );
 }
+
+/**
+ * A canteen's rating, as a star, a number and how many people said so.
+ *
+ * The count is not decoration: 4.9 from three reviews and 4.3 from two hundred are
+ * very different claims, and showing only the average makes them look identical.
+ * Below a handful of reviews there is no average worth printing, so it says "New"
+ * instead of implying a verdict the data cannot support.
+ */
+export function Rating({
+  average,
+  count,
+  minimum = 3,
+}: {
+  average: number | null | undefined;
+  count: number | null | undefined;
+  minimum?: number;
+}) {
+  const t = useTheme();
+  const reviews = count ?? 0;
+
+  if (typeof average !== 'number' || reviews < minimum) {
+    return (
+      <Text
+        style={[t.font.caption, { color: t.color.textMuted }]}
+        accessibilityLabel="Not enough ratings yet"
+      >
+        New
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+      accessibilityLabel={`Rated ${average} out of 5 by ${reviews} ${reviews === 1 ? 'person' : 'people'}`}
+    >
+      {/* The star is decoration beside a number that already says it, so it is
+       * hidden rather than read out as "black star". */}
+      <Text accessibilityElementsHidden style={{ fontSize: 12, color: t.color.success }}>
+        ★
+      </Text>
+      <Text style={[t.font.label, { color: t.color.text }]}>{average.toFixed(1)}</Text>
+      <Text style={[t.font.caption, { color: t.color.textMuted }]}>({reviews})</Text>
+    </View>
+  );
+}

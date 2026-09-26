@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 7 complete.** 317 tests green offline, plus 59/59 live checks
+**Phase 7 complete.** 328 tests green offline, plus 59/59 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history and engagement. Every admin page has been driven in a
 browser against real data. **Phase 8 (push, Razorpay, Sentry, deploy) is next.**
@@ -144,6 +144,68 @@ npm run dev:admin      # next dev
 npm run db:push        # deploy migrations to the linked project
 ```
 
+## The mobile design system
+
+`src/theme.ts` holds the tokens (colour, space, radius, type, **elevation**, motion);
+`src/components/ui.tsx` holds the primitives; `src/components/patterns.tsx` holds the
+compositions — `AppBar`, `IconButton`, `Chip`, `SectionHeader`, `Skeleton`,
+`SkeletonList`, `Price`, `QtyStepper`, `Thumb`, `VegMark`.
+
+Four decisions worth not re-litigating:
+
+- **`Screen` owns the keyboard.** Six screens took text input and none handled it; the
+  counter's menu could not reveal its input at all, because that `Screen` does not
+  scroll. It is now handled in one place: `KeyboardAvoidingView` (iOS padding only —
+  Android resizes its own window via `softwareKeyboardLayoutMode: "resize"`), plus
+  `reveal()`, which measures the focused input with `measureInWindow` against the live
+  keyboard height and scrolls exactly the overlap. **No pixel constant anywhere**, so
+  nothing is tuned to one handset. A `Field` registers itself on focus; the keyboard
+  _event_ is the trigger, not a `setTimeout` that loses the race on a slow device.
+- **`Screen` takes a `footer`** — the sticky action area, outside the ScrollView so it
+  never scrolls away and inside the KeyboardAvoidingView so it rides above the keyboard.
+  Cart, checkout, home, the canteen menu and the delivery detail all use it.
+- **`Thumb` renders nothing without a URL.** `image_url` exists on `menu_items` and
+  `canteens` but `seed.sql` sets it **zero times**, so every row in the live database
+  has null. Reserving a square for a photo that does not exist is a list of empty
+  boxes, so the row gives the space back to the name instead, and a photo added later
+  simply appears with the text reflowing around it. `fallback="initial"` opts into a
+  tinted initial where absence would read as a fault. A counter adds a photo from
+  `(canteen)/menu.tsx`; the admin already had the field.
+- **`VegMark`, not 🟢/🔴.** A red dot and a green dot are the same dot to a red-green
+  colourblind student, so the mark is a bordered square that also carries a label —
+  colour never carries the meaning alone.
+
+**Ratings and ETAs** come from `canteen_stats`, and the one thing to know about it is
+that it is **deliberately not `security_invoker`** — the opposite call to
+`revenue_by_canteen_day`, for a stated reason. `orders_read` limits a student to their
+own orders, so an invoker view would compute each student a private median from their
+own handful of orders, and a new student would see no ETA at all. A kitchen's speed is
+a property of the kitchen. That is only safe because **every column is an aggregate**;
+`canteen-stats.test.ts` pins the column list so adding a per-order one fails loudly.
+
+The prep figure is the **median** of `accepted → ready` over 30 days: the median so the
+order nobody marked ready until closing does not drag it, and that window so a canteen
+that got faster is judged on how it cooks now. `estimatedMinutes()` in `config.ts` adds
+the walk and rounds up to the nearest five, falling back to a default below
+`minPrepSampleSize` — a median of three orders is an anecdote, not a promise.
+
+**The counter's tab badges** come from `countOrdersByStatus`, which selects the
+`status` column alone for every live status and groups the rows client-side — one
+request rather than four `head: true` counts, and a payload of a few bytes per
+in-flight order. It passes no `canteen_id`, exactly like `listCanteenOrders`, because
+`orders_read` already scopes a canteen account to its own canteen (rule 15); proven
+live, where a rival canteen's identical query returns only its own orders. **"Done" is
+not counted** — every order ever finished grows without bound and tells the counter
+nothing they can act on, and a badge exists to say "look here now". A zero shows no
+badge at all rather than a row of noughts.
+
+**Search** is `searchMenuItems` in `catalog.ts`. `menu_items_read` already lets any
+signed-in student read any active item campus-wide, so it needed no policy, no view
+and no migration. The user's wildcards are **stripped, not escaped**: checked against
+the live project, `ilike` with `%Mag\%i%` returns exactly what `%Mag%i%` returns, so
+PostgREST does not pass the backslash through as an ESCAPE — leaving them in means a
+two-character search for `%a` quietly matches the whole menu.
+
 ## Environment — three files, not one
 
 `.env.example` documents all of it, but the layout is the part worth knowing before you
@@ -202,6 +264,10 @@ that belongs in a bundle.
 13. **Never hand-edit `database.types.ts`.** Change a migration, run `npm run db:types`.
 14. **No literal colours or spacings in a component.** Read tokens from `useTheme()`
     (mobile) or the CSS variables in `globals.css` (admin).
+    14a. **Compose from `ui.tsx` and `patterns.tsx`; never re-invent a primitive locally.**
+    Three screens had each grown a private quantity stepper, chip and back button.
+    A pattern that exists once is a pattern that stays consistent — and `Screen` is
+    the only place the keyboard is handled, so a new form cannot forget it.
 15. **Role routing is ergonomics, not security.** RLS is the boundary. A patched
     client gets a different menu and no extra data.
 16. **Never write the product name in a component.** Import `BRAND` from

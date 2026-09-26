@@ -27,6 +27,7 @@ import {
   Screen,
 } from '../../../src/components/ui';
 import { OrderLines, StatusPill } from '../../../src/components/order';
+import { AppBar } from '../../../src/components/patterns';
 import { useTheme } from '../../../src/theme';
 
 /**
@@ -65,7 +66,7 @@ export default function DeliveryDetail() {
   if (!order.data) {
     return (
       <Screen>
-        <Button label="← Back" variant="secondary" onPress={() => router.replace('/deliveries')} />
+        <AppBar title="Delivery" onBack={() => router.replace('/deliveries')} />
         <EmptyState
           title="Not your delivery"
           body="Another partner may have taken it, or it was cancelled."
@@ -125,24 +126,37 @@ export default function DeliveryDetail() {
   }
 
   return (
-    <Screen scroll>
-      <Button
-        label="← All deliveries"
-        variant="secondary"
-        onPress={() => router.replace('/deliveries')}
+    <Screen
+      scroll
+      /*
+       * The actions live in the sticky bar rather than at the end of the scroll.
+       * A partner is holding a bag in one hand at a hostel door (§15) -- the button
+       * they need has to be under the thumb without scrolling to find it.
+       */
+      footer={
+        isTerminal(status) ? undefined : (
+          <View style={{ gap: t.space.sm }}>
+            {moves.map((to) => (
+              <Button
+                key={to}
+                label={ACTION_LABEL[to] ?? to}
+                variant={to === 'ready' ? 'secondary' : 'primary'}
+                onPress={() => act(to)}
+                loading={transition.isPending || release.isPending}
+              />
+            ))}
+          </View>
+        )
+      }
+    >
+      <AppBar
+        title={data.code}
+        subtitle={`Pick up from ${data.canteen_name_snapshot}`}
+        onBack={() => router.replace('/deliveries')}
+        right={<StatusPill status={data.status} />}
       />
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-        <Heading level="display">{data.code}</Heading>
-        <StatusPill status={data.status} />
-      </View>
-
-      <Card>
-        <Body muted>Pick up from</Body>
-        <Heading level="title">{data.canteen_name_snapshot}</Heading>
-      </Card>
-
-      <Card style={{ borderColor: t.color.primary }}>
+      <Card style={{ borderColor: t.color.primary, borderWidth: 1.5 }}>
         <Body muted>Deliver to</Body>
         <Heading level="display">{data.hostel_label}</Heading>
         <Heading level="title">
@@ -170,21 +184,7 @@ export default function DeliveryDetail() {
         </Body>
       </Card>
 
-      {isTerminal(status) ? (
-        <Body muted>This delivery is finished.</Body>
-      ) : (
-        <View style={{ gap: t.space.sm }}>
-          {moves.map((to) => (
-            <Button
-              key={to}
-              label={ACTION_LABEL[to] ?? to}
-              variant={to === 'ready' ? 'secondary' : 'primary'}
-              onPress={() => act(to)}
-              loading={transition.isPending || release.isPending}
-            />
-          ))}
-        </View>
-      )}
+      {isTerminal(status) ? <Body muted>This delivery is finished.</Body> : null}
     </Screen>
   );
 }

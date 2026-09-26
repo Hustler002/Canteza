@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatPaise, toAppError } from '@canteza/shared';
-import type { Canteen } from '@canteza/api';
+import { estimatedMinutes, formatPaise, toAppError } from '@canteza/shared';
+import type { Canteen, CanteenStats } from '@canteza/api';
 import {
   useActiveOrder,
   useCanteens,
   useFavorites,
+  useCanteenStats,
   useHostels,
   useMenuSearch,
   useOrdersRealtime,
@@ -29,6 +30,7 @@ import {
   AppBar,
   IconButton,
   Price,
+  Rating,
   SectionHeader,
   SkeletonList,
   Thumb,
@@ -44,6 +46,7 @@ export default function StudentHome() {
   const cartUnits = useCart((state) => state.totalUnits());
   const cartCanteen = useCart((state) => state.canteenId);
   const favourites = useFavorites();
+  const stats = useCanteenStats();
   const hostels = useHostels();
   const [term, setTerm] = useState('');
 
@@ -84,6 +87,7 @@ export default function StudentHome() {
 
   const order = activeOrder.data;
   const searching = term.trim().length >= 2;
+  const statsById = new Map((stats.data ?? []).map((row) => [row.canteen_id, row]));
   const canteenNameById = new Map(
     (canteens.data ?? []).map((canteen) => [canteen.id, canteen.name ?? 'Canteen']),
   );
@@ -174,7 +178,7 @@ export default function StudentHome() {
               <SectionHeader title="Canteens" />
             </View>
           }
-          renderItem={({ item }) => <CanteenCard canteen={item} />}
+          renderItem={({ item }) => <CanteenCard canteen={item} stats={statsById.get(item.id)} />}
           ListEmptyComponent={
             <EmptyState title="No canteens yet" body="An admin has not added any canteens." />
           }
@@ -321,11 +325,13 @@ function DishResults({
   );
 }
 
-function CanteenCard({ canteen }: { canteen: Canteen }) {
+function CanteenCard({ canteen, stats }: { canteen: Canteen; stats?: CanteenStats | undefined }) {
   const t = useTheme();
   // `is_open` is computed by the view from opening hours, so it is never stale.
   const open = Boolean(canteen.is_open) && Boolean(canteen.is_accepting_orders);
   const name = canteen.name ?? 'Canteen';
+  // Quoting a delivery time for a shut kitchen would be a promise nobody can keep.
+  const eta = open ? estimatedMinutes(stats?.median_prep_minutes, stats?.prep_sample_size) : null;
 
   return (
     <Pressable
@@ -356,6 +362,19 @@ function CanteenCard({ canteen }: { canteen: Canteen }) {
               <Badge label={open ? 'Open' : 'Closed'} tone={open ? 'success' : 'neutral'} />
             </View>
             {canteen.description ? <Body muted>{canteen.description}</Body> : null}
+
+            {/*
+             * Rating and ETA, the two questions asked before tapping (§7). They sit
+             * on their own row above the hours, because "is it good and how long"
+             * decides the tap while the opening hours only explain a closed badge.
+             */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+              <Rating average={stats?.avg_food_rating} count={stats?.review_count} />
+              {eta !== null ? (
+                <Text style={[t.font.label, { color: t.color.text }]}>~{eta} min</Text>
+              ) : null}
+            </View>
+
             <Body muted>
               {canteen.opens_at?.slice(0, 5)}–{canteen.closes_at?.slice(0, 5)}
               {canteen.min_order_paise ? ` · min ${formatPaise(canteen.min_order_paise)}` : ''}

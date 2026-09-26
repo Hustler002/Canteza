@@ -2,8 +2,14 @@ import { useState } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { MenuItem } from '@canteza/api';
-import { BRAND, formatPaise, toAppError } from '@canteza/shared';
-import { useCanteen, useFavorites, useMenu, useToggleFavorite } from '../../../src/lib/queries';
+import { BRAND, estimatedMinutes, formatPaise, toAppError } from '@canteza/shared';
+import {
+  useCanteen,
+  useCanteenStats,
+  useFavorites,
+  useMenu,
+  useToggleFavorite,
+} from '../../../src/lib/queries';
 import { useIdentity } from '../../../src/lib/session';
 import { useCart } from '../../../src/store/cart';
 import {
@@ -17,7 +23,14 @@ import {
   Loading,
   Screen,
 } from '../../../src/components/ui';
-import { AppBar, Price, QtyStepper, Thumb, VegMark } from '../../../src/components/patterns';
+import {
+  AppBar,
+  Price,
+  QtyStepper,
+  Rating,
+  Thumb,
+  VegMark,
+} from '../../../src/components/patterns';
 import { useTheme } from '../../../src/theme';
 
 export default function CanteenMenu() {
@@ -30,6 +43,7 @@ export default function CanteenMenu() {
   const cartCanteen = useCart((state) => state.canteenId);
   const cartLines = useCart((state) => state.lines);
   const favourites = useFavorites();
+  const allStats = useCanteenStats();
 
   if (canteen.isLoading || menu.isLoading) return <Loading label="Loading menu…" />;
   if (menu.isError) {
@@ -44,6 +58,7 @@ export default function CanteenMenu() {
     return <EmptyState title="Canteen not found" body="It may have been closed down." />;
   }
 
+  const stats = (allStats.data ?? []).find((row) => row.canteen_id === canteenId);
   const open = Boolean(canteen.data.is_open) && Boolean(canteen.data.is_accepting_orders);
   const showCartBar = cartUnits > 0 && cartCanteen === canteenId;
   const favouriteIds = new Set((favourites.data ?? []).map((row) => row.menu_item_id));
@@ -77,12 +92,17 @@ export default function CanteenMenu() {
           title={canteen.data.name ?? 'Canteen'}
           subtitle={
             open
-              ? canteen.data.min_order_paise
-                ? `Open · minimum ${formatPaise(canteen.data.min_order_paise)}`
-                : 'Open now'
+              ? // The same quote the home card gave, carried through so the number
+                // does not change between choosing a canteen and ordering from it.
+                `~${estimatedMinutes(stats?.median_prep_minutes, stats?.prep_sample_size)} min${
+                  canteen.data.min_order_paise
+                    ? ` · minimum ${formatPaise(canteen.data.min_order_paise)}`
+                    : ''
+                }`
               : 'Closed — browse only'
           }
           onBack={() => router.back()}
+          right={<Rating average={stats?.avg_food_rating} count={stats?.review_count} />}
         />
       </View>
 

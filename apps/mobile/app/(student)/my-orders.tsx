@@ -20,6 +20,8 @@ import {
   Screen,
 } from '../../src/components/ui';
 import { StatusPill } from '../../src/components/order';
+import { AppBar, Price } from '../../src/components/patterns';
+import { ReorderButton } from '../../src/components/reorder';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -53,20 +55,21 @@ export default function MyOrders() {
 
   return (
     <Screen padded={false}>
+      <View style={{ paddingHorizontal: t.space.lg, paddingTop: t.space.sm }}>
+        <AppBar
+          title="Your orders"
+          subtitle="Tap one to see it, or repeat it in a tap"
+          onBack={() => router.back()}
+        />
+      </View>
       <FlatList
         data={orders.data ?? []}
         keyExtractor={(order) => order.id}
         contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
-        ListHeaderComponent={
-          <View style={{ gap: t.space.xs, marginBottom: t.space.sm }}>
-            <Heading level="display">Your orders</Heading>
-            <Body muted>Tap one to see what was in it and what it cost.</Body>
-          </View>
-        }
         ListEmptyComponent={
           <EmptyState
-            title="Nothing yet"
-            body="Your orders will show up here once you have placed one."
+            title="No orders yet"
+            body="Once you order something, it shows up here ready to repeat."
           />
         }
         renderItem={({ item }) => <OrderRow order={item} />}
@@ -86,13 +89,17 @@ function OrderRow({ order }: { order: OrderWithItems }) {
   const live = !isTerminal(order.status as OrderStatus);
 
   return (
-    <Pressable
-      onPress={() => router.push(`/order/${order.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`Order ${order.code}, ${formatPaise(order.total_paise)}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-    >
-      <Card style={live ? { borderColor: t.color.primary } : {}}>
+    <Card style={live ? { borderColor: t.color.primary, borderWidth: 1.5 } : {}}>
+      {/*
+       * The card opens the order; the reorder button below is its own target. The
+       * Pressable wraps only the readable part so the two taps never fight (§12).
+       */}
+      <Pressable
+        onPress={() => router.push(`/order/${order.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`Order ${order.code}, ${formatPaise(order.total_paise)}`}
+        style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, gap: t.space.sm })}
+      >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
           <Heading level="heading">{order.canteen_name_snapshot}</Heading>
           <StatusPill status={order.status} />
@@ -110,10 +117,16 @@ function OrderRow({ order }: { order: OrderWithItems }) {
           {order.order_items.map((item) => `${item.quantity} × ${item.name_snapshot}`).join(', ')}
         </Body>
 
-        <Body muted>
-          {units} {units === 1 ? 'item' : 'items'} · {formatPaise(order.total_paise)}
-        </Body>
-      </Card>
-    </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+          <Price value={formatPaise(order.total_paise)} />
+          <Body muted>
+            · {units} {units === 1 ? 'item' : 'items'}
+          </Body>
+        </View>
+      </Pressable>
+
+      {/* Repeating a finished order is the whole point of this screen. */}
+      {!live ? <ReorderButton order={order} compact /> : null}
+    </Card>
   );
 }
