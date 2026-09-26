@@ -18,6 +18,7 @@ import {
   Loading,
   Screen,
 } from '../../src/components/ui';
+import { Thumb } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -115,6 +116,7 @@ function MenuRow({ item }: { item: MenuItem }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(item.name);
   const [price, setPrice] = useState(String(paiseToRupees(item.price_paise)));
+  const [imageUrl, setImageUrl] = useState(item.image_url ?? '');
   const [error, setError] = useState<string | null>(null);
   const update = useUpdateMenuItem();
 
@@ -136,7 +138,14 @@ function MenuRow({ item }: { item: MenuItem }) {
       setError('A dish needs a name.');
       return;
     }
-    patch({ name: name.trim(), price_paise: pricePaise });
+    // An empty box means "no picture", which is null in the column rather than an
+    // empty string -- `Thumb` tests for a URL, and '' is not one.
+    const trimmedUrl = imageUrl.trim();
+    patch({
+      name: name.trim(),
+      price_paise: pricePaise,
+      image_url: trimmedUrl === '' ? null : trimmedUrl,
+    });
     setOpen(false);
   };
 
@@ -149,6 +158,7 @@ function MenuRow({ item }: { item: MenuItem }) {
         accessibilityLabel={`${item.name}, ${formatPaise(item.price_paise)}`}
         style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}
       >
+        <Thumb name={item.name} uri={item.image_url} size={44} />
         <View style={{ flex: 1, gap: t.space.xs }}>
           <Heading level="heading">{item.name}</Heading>
           <Body muted>{formatPaise(item.price_paise)}</Body>
@@ -185,6 +195,28 @@ function MenuRow({ item }: { item: MenuItem }) {
             onChangeText={setPrice}
             keyboardType="number-pad"
           />
+          {/*
+           * A photo is optional and stays optional. With no URL the student's menu
+           * gives the space back to the dish name rather than showing an empty box,
+           * so a counter that never adds one still looks deliberate -- and a counter
+           * that does gets the picture on the student's list immediately.
+           */}
+          <Field
+            label="Photo link (optional)"
+            value={imageUrl}
+            onChangeText={setImageUrl}
+            placeholder="https://…"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            hint="Leave empty for no photo."
+          />
+          {imageUrl.trim() ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+              <Thumb name={name} uri={imageUrl.trim()} size={56} />
+              <Body muted>This is how it will look on the menu.</Body>
+            </View>
+          ) : null}
           <FormError message={error} />
           <Button label="Save" loading={update.isPending} onPress={save} />
           {item.is_active ? (

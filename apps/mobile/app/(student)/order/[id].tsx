@@ -240,6 +240,9 @@ function RateCard({ order }: { order: OrderWithItems }) {
         value={comment}
         onChangeText={setComment}
         placeholder="Hot, on time, good portion"
+        multiline
+        maxLength={280}
+        hint="Only the canteen and an admin will read this."
       />
       <FormError message={error} />
       <Button label="Submit rating" loading={create.isPending} onPress={submit} />

@@ -14,6 +14,8 @@ export const queryKeys = {
   menu: (canteenId: string) => ['canteens', canteenId, 'menu'] as const,
   /** The counter's own view of it: retired items included, which a student never sees. */
   canteenMenu: (canteenId: string) => ['canteens', canteenId, 'menu', 'all'] as const,
+  /** Dish search across canteens. Keyed by term so each one caches on its own. */
+  menuSearch: (term: string) => ['menu', 'search', term] as const,
   categories: () => ['categories'] as const,
   hostels: () => ['hostels'] as const,
 

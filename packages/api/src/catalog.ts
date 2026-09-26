@@ -42,6 +42,49 @@ export async function listMenu(client: CampusClient, canteenId: string): Promise
   );
 }
 
+/**
+ * Dish search across every canteen.
+ *
+ * `menu_items_read` already lets any signed-in student read any active item, so this
+ * needs no new policy and no view -- it is the search the home screen never had, not
+ * a change to how the data is protected.
+ *
+ * The term goes through `.ilike()` as a bound parameter rather than into a PostgREST
+ * `or=(...)` string, so unlike the admin's order search there is no expression for a
+ * comma to break out of.
+ *
+ * The user's own wildcards are **stripped, not escaped**. Backslash-escaping them is
+ * the obvious move and it does not work: checked against the live project, `ilike`
+ * with `%Mag\%i%` returns exactly what `%Mag%i%` returns, so PostgREST does not pass
+ * the backslash through as an ESCAPE. Since `%` and `_` are not characters anyone
+ * searches a menu for, dropping them is both honest and harmless -- where leaving
+ * them in means a two-character search for `%a` quietly matches the whole menu.
+ *
+ * Sold-out dishes are included for the same reason `listMenu` returns them: someone
+ * searching "Maggi" wants to know it exists and is finished, not to conclude the
+ * canteen never sold it.
+ */
+export async function searchMenuItems(
+  client: CampusClient,
+  term: string,
+  limit = 25,
+): Promise<MenuItem[]> {
+  const cleaned = term.trim().replace(/[%_\\]/g, '');
+  if (cleaned.length < 2) return [];
+
+  const pattern = `%${cleaned}%`;
+
+  return unwrapList(
+    client
+      .from('menu_items')
+      .select('*')
+      .eq('is_active', true)
+      .ilike('name', pattern)
+      .order('name')
+      .limit(limit),
+  );
+}
+
 export async function listCategories(client: CampusClient): Promise<Category[]> {
   return unwrapList(client.from('food_categories').select('*').order('sort_order'));
 }

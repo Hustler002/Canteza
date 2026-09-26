@@ -28,6 +28,7 @@ import {
   placeOrder,
   queryKeys,
   releaseDelivery,
+  searchMenuItems,
   removeFavorite,
   saveDefaultAddress,
   setOnline,
@@ -69,6 +70,25 @@ export function useMenu(canteenId: string) {
     queryKey: queryKeys.menu(canteenId),
     queryFn: () => listMenu(supabase, canteenId),
     enabled: Boolean(canteenId),
+  });
+}
+
+/**
+ * Dish search across every canteen.
+ *
+ * `enabled` below two characters is what stops a query firing on every keystroke of
+ * "ma" on the way to "maggi"; TanStack then caches per term, so backspacing to a
+ * term already typed is instant rather than another round trip. `keepPreviousData`
+ * via `placeholderData` means the list does not blink empty between letters.
+ */
+export function useMenuSearch(term: string) {
+  const cleaned = term.trim();
+  return useQuery({
+    queryKey: queryKeys.menuSearch(cleaned),
+    queryFn: () => searchMenuItems(supabase, cleaned),
+    enabled: cleaned.length >= 2,
+    placeholderData: (previous) => previous,
+    staleTime: 30 * 1000,
   });
 }
 

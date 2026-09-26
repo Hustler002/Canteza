@@ -1,4 +1,13 @@
-import { useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -7,11 +16,13 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '../lib/keyboard';
 import { useTheme, type Theme } from '../theme';
 
 /**
@@ -20,6 +31,23 @@ import { useTheme, type Theme } from '../theme';
  *
  * Everything reads tokens from useTheme(); no literal colours or spacings below.
  */
+
+/**
+ * How a `Field` tells its `Screen` which input is focused.
+ *
+ * The screen cannot know, and the field cannot scroll, so the field registers itself
+ * and the screen does the arithmetic. Any input rendered inside a scrolling `Screen`
+ * gets this for free; one rendered outside simply finds no provider and does
+ * nothing, which is why the context is nullable rather than throwing.
+ */
+type ScrollAssist = { setActiveInput: (node: MeasurableInput | null) => void };
+type MeasurableInput = {
+  measureInWindow: (
+    callback: (x: number, y: number, width: number, height: number) => void,
+  ) => void;
+};
+
+const ScrollAssistContext = createContext<ScrollAssist | null>(null);
 
 /**
  * Every screen's frame, and the one place the keyboard is handled.
@@ -37,7 +65,9 @@ import { useTheme, type Theme } from '../theme';
  * - **iOS** never resizes, so `KeyboardAvoidingView` adds the padding instead, and
  *   `automaticallyAdjustKeyboardInsets` scrolls the focused field into view.
  *
- * Neither path contains a pixel offset, so nothing here is tuned to one device.
+ * On top of both, `reveal()` below scrolls the focused field clear of the keyboard
+ * using measured geometry, so the requirement holds even where the platform's own
+ * behaviour does not.
  *
  * `footer` is the sticky action area -- a checkout CTA, a submit button. It sits
  * outside the ScrollView so it never scrolls away, and inside the
@@ -58,6 +88,51 @@ export function Screen({
   const pad = padded ? t.space.lg : 0;
   const inner: ViewStyle = { flex: 1, padding: pad, gap: t.space.lg };
 
+  const scrollRef = useRef<ScrollView>(null);
+  const offset = useRef(0);
+  const activeInput = useRef<MeasurableInput | null>(null);
+  const keyboard = useKeyboardHeight();
+  const { height: windowHeight } = useWindowDimensions();
+
+  /**
+   * Scroll the focused input clear of the keyboard, if it is not already.
+   *
+   * Everything here is measured at the moment it runs -- the input's position from
+   * `measureInWindow`, the keyboard's height from its own event, the window from
+   * the current dimensions. There is no device-specific constant, which is the
+   * whole point: a number tuned on one handset is wrong on the next one.
+   */
+  const reveal = useCallback(() => {
+    const node = activeInput.current;
+    if (!node || keyboard <= 0) return;
+
+    node.measureInWindow((_x, y, _width, height) => {
+      const keyboardTop = windowHeight - keyboard;
+      const wantedBottom = y + height + t.space.lg;
+      const overlap = wantedBottom - keyboardTop;
+      if (overlap > 0) {
+        scrollRef.current?.scrollTo({ y: offset.current + overlap, animated: true });
+      }
+    });
+  }, [keyboard, windowHeight, t.space.lg]);
+
+  // The keyboard opening (or growing, as a suggestion strip appears) is the trigger.
+  // Reacting to the event rather than guessing a delay after focus is what makes
+  // this reliable on a slow device, where a fixed timeout loses the race.
+  useEffect(reveal, [reveal]);
+
+  const assist = useMemo<ScrollAssist>(
+    () => ({
+      setActiveInput: (node) => {
+        activeInput.current = node;
+        // Moving between fields while the keyboard is already up produces no
+        // keyboard event, so that case has to ask for the scroll itself.
+        if (node && keyboard > 0) requestAnimationFrame(reveal);
+      },
+    }),
+    [keyboard, reveal],
+  );
+
   // A sticky footer already covers the bottom inset, so letting SafeAreaView pad it
   // too would leave a stripe of background under the bar.
   const edges = footer ? (['top'] as const) : (['top', 'bottom'] as const);
@@ -68,20 +143,31 @@ export function Screen({
         style={{ flex: 1 }}
         {...(Platform.OS === 'ios' ? { behavior: 'padding' as const } : {})}
       >
-        {scroll ? (
-          <ScrollView
-            contentContainerStyle={{ padding: pad, gap: t.space.lg, paddingBottom: pad + t.space.xl }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-            showsVerticalScrollIndicator={false}
-          >
-            {children}
-          </ScrollView>
-        ) : (
-          <View style={inner}>{children}</View>
-        )}
-        {footer ? <StickyFooter>{footer}</StickyFooter> : null}
+        <ScrollAssistContext.Provider value={assist}>
+          {scroll ? (
+            <ScrollView
+              ref={scrollRef}
+              contentContainerStyle={{
+                padding: pad,
+                gap: t.space.lg,
+                paddingBottom: pad + t.space.xl,
+              }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(event) => {
+                offset.current = event.nativeEvent.contentOffset.y;
+              }}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={inner}>{children}</View>
+          )}
+          {footer ? <StickyFooter>{footer}</StickyFooter> : null}
+        </ScrollAssistContext.Provider>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -264,6 +350,8 @@ export function Field({
 }: TextInputProps & { label: string; error?: string | undefined; hint?: string | undefined }) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const assist = useContext(ScrollAssistContext);
 
   const multiline = props.multiline === true;
   const length = typeof props.value === 'string' ? props.value.length : 0;
@@ -276,15 +364,19 @@ export function Field({
     <View style={{ gap: t.space.sm }}>
       <Text style={[t.font.label, { color: t.color.textMuted }]}>{label}</Text>
       <TextInput
+        ref={inputRef}
         accessibilityLabel={label}
         placeholderTextColor={t.color.textFaint}
         {...props}
         onFocus={(event) => {
           setFocused(true);
+          // Tell the enclosing Screen which input to keep above the keyboard.
+          assist?.setActiveInput(inputRef.current);
           props.onFocus?.(event);
         }}
         onBlur={(event) => {
           setFocused(false);
+          assist?.setActiveInput(null);
           props.onBlur?.(event);
         }}
         {...(multiline ? { textAlignVertical: 'top' as const } : {})}
