@@ -78,8 +78,9 @@ npx eas-cli init
 
 - **`expo-dev-client`** — what makes the build a _development_ build: it loads JS from
   Metro like Expo Go, so the edit/reload loop is unchanged afterwards.
-- **`expo-notifications`** — for push. Nothing reads it yet; it is here so push does not
-  cost a rebuild.
+- **`expo-notifications`** — for push. Having it compiled in turned out not to be enough:
+  push also needs Firebase's config in the build, so it costs one more build after all.
+  See "Push: the second build" below.
 - **`react-native-razorpay`** — the checkout. Version 3.0.0, last published 2026-07-21.
   It ships **no Expo config plugin**, so it relies on autolinking; that works for a dev
   build, but if it turns out to need an `AndroidManifest` entry we will have to write a
@@ -111,33 +112,64 @@ npm run dev:mobile
 Same Metro server as before; the dev build connects to it the same way. Everything about
 the workflow is unchanged except which app you open.
 
-## Razorpay, separately
+## Razorpay
 
-The checkout also needs a Razorpay account — https://dashboard.razorpay.com/signup.
-**Test mode is enough**, and no KYC is needed for test mode.
+The native checkout is written (`src/lib/razorpay.ts`, checkout, the order screen).
+**It needs no rebuild**: `react-native-razorpay` was installed before this build, so it
+is already compiled in. Whether autolinking actually registered it is something only the
+phone can say — if it did not, checkout simply offers cash only, because the app asks the
+module registry before it ever loads the package.
 
-From the dashboard you will need three things:
+**Nothing Razorpay-related goes in this app or in `eas.json`.** Not even the key id:
+`create-payment` returns it alongside the Razorpay order, so the key that opens the sheet
+is always the one whose secret created the order. A key id from test mode with a secret
+from live mode is the classic way to get a sheet that opens and then fails.
 
-| Value          | Where it goes                      | Why                                    |
-| -------------- | ---------------------------------- | -------------------------------------- |
-| Key ID         | the app (public, safe in a bundle) | opens the checkout sheet               |
-| Key secret     | **Edge Function secret only**      | creates orders; never in an app bundle |
-| Webhook secret | **Edge Function secret only**      | verifies the webhook signature         |
+Deploying the server side — migration, secrets, both functions, the webhook, and the
+automatic-capture setting — is in
+[`supabase/functions/README.md`](../../supabase/functions/README.md#deploying).
 
-Then:
+## Push: the second build
+
+Push needs **one more build**. An Expo push token on Android is a Firebase Cloud Messaging
+token underneath, and the app can only get one if Firebase's config file is compiled into
+it. `expo-notifications` being installed was not enough; the earlier note here that push
+would need no rebuild was wrong.
+
+Everything on the app side is written and waiting for that build: `src/lib/push.ts` asks
+for permission, creates the `orders` channel, registers the device, and opens the right
+screen when a notification is tapped. Until the build has Firebase in it, registration
+fails quietly and logs `[push] registration skipped` — the app works exactly as before.
+
+### 1. A Firebase project
+
+Free. https://console.firebase.google.com → Add project (Analytics not needed) → add an
+**Android app** with package name **`edu.campus.canteza`** — it must match `app.json`
+exactly. Download **`google-services.json`** into `apps/mobile/`.
+
+That file is not a secret (it identifies the app to Firebase and is readable from any
+installed APK), so it can be committed — and must be, or at least be present, because EAS
+builds from the repo. Tell me when it is there and I will wire `android.googleServicesFile`
+into `app.json`; pointing at a file that does not exist yet would break every build.
+
+### 2. Give Expo permission to send through it
+
+Firebase console → Project settings → **Service accounts** → Generate new private key.
+This one **is** a secret: never commit it. Upload it to EAS instead:
 
 ```bash
-npx supabase secrets set RAZORPAY_KEY_ID=rzp_test_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=...
+npx eas-cli credentials --platform android
 ```
+
+Choose the development profile → Google Service Account → **Push Notifications (FCM
+V1)** → upload the JSON. Expo's push service uses it to talk to Firebase for you.
+
+### 3. Rebuild and reinstall
 
 ```bash
-npx supabase functions deploy verify-payment
+npx eas-cli build --profile development --platform android
 ```
 
-And point a webhook at `https://xsekofflcpocxewqzfbx.supabase.co/functions/v1/verify-payment`,
-subscribed to `payment.captured` and `payment.failed`.
+Then install the new APK over the old one. **Reload once it opens** — rule 18a.
 
-The server side of all this is already written, tested and live-verified — see
-`supabase/functions/README.md` for what that does and does not prove. What has never
-executed is the Edge Function itself and the native checkout, which is exactly what this
-build exists to make testable.
+On first launch after signing in, Android 13+ asks for notification permission. Allow it.

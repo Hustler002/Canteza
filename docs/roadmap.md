@@ -324,3 +324,27 @@ is a native module and needs the same; and a development build is an EAS build. 
 Sentry and EAS therefore stand or fall together, and nothing among them can be
 exercised on a phone until that move is made. Razorpay is independent but needs a
 merchant account and keys before its webhook can be written against anything real.
+
+**Razorpay: server side and native checkout both written; the checkout is untested on a
+device.** The EAS development build exists and runs on a real Android phone, with
+`react-native-razorpay` compiled in. The checkout offers "Pay online" when the native
+module is present, opens the sheet against a Razorpay order made by the new
+`create-payment` function, and lands on the order screen whatever happens in the sheet;
+that screen confirms, reports a failure, or offers to pay again, all from the server's
+view of the payment. Wiring it exposed four ways money and orders could fall out of
+step — a second card tried in the same sheet was dropped, a cancelled order could be
+paid for, two taps could attach two Razorpay orders, and the counter was paged for
+unpaid orders — all fixed in `20260927100000_razorpay_checkout.sql` and pinned by tests
+that fail without it. Deployment steps are in `supabase/functions/README.md`; what has
+still never run is the Deno runtime, a real Razorpay payment, and the sheet itself.
+
+(Since then the checkout has run on the phone in test mode: card and wallet payments
+confirmed by the deployed webhook, a declined card recorded with Razorpay's reason. UPI is
+switched off on the Razorpay account.)
+
+**Expo push: written, waiting on a second build.** An inbox row is now also a push: a
+Database Webhook on `notifications` fires `send-push`, which renders the same wording the
+inbox does — from a generated copy of `packages/shared/src/notifications.ts` that a test
+holds identical — and sends it to the recipient's devices in `push_tokens`. A device
+belongs to whoever signed in on it last. It needs Firebase config compiled into the app,
+so, contrary to an earlier note, push does cost one more EAS build.

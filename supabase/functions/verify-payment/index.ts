@@ -94,6 +94,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: 'could not record payment' }, 500);
   }
 
+  if (data === 'REFUND_REQUIRED') {
+    // Real money against an order that is no longer open: paid in the same moment it
+    // was cancelled, or after the sweep expired it. The row now carries the payment id
+    // and says so in `failure_reason`. 200, because retrying changes nothing -- this
+    // needs a person, and this log line is how they find out.
+    console.error('REFUND REQUIRED', outcome.providerOrderId, outcome.providerPaymentId);
+    return json({ result: data }, 200);
+  }
+
   if (data === 'UNKNOWN_ORDER') {
     // Not an error: the webhook can outrun our own transaction. 409 asks Razorpay to
     // come back, which it will.

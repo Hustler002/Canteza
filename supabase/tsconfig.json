@@ -8,6 +8,6 @@
     "rootDir": "..",
     "types": ["node"]
   },
-  "include": ["test/**/*.ts"],
+  "include": ["test/**/*.ts", "functions/_shared/**/*.ts"],
   "references": [{ "path": "../packages/shared" }]
 }

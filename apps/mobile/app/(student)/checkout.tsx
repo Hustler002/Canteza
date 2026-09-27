@@ -9,16 +9,19 @@ import {
   normaliseCouponCode,
   PLATFORM_DEFAULTS,
   toAppError,
+  type PaymentMethod,
 } from '@canteza/shared';
 import {
   useCanteen,
   useCoupons,
   useHostels,
   useMenu,
+  usePayForOrder,
   usePlaceOrder,
   useSaveDefaultAddress,
 } from '../../src/lib/queries';
 import { useIdentity, useSession } from '../../src/lib/session';
+import { isOnlinePaymentAvailable } from '../../src/lib/razorpay';
 import { useCart } from '../../src/store/cart';
 import {
   Badge,
@@ -48,6 +51,7 @@ export default function Checkout() {
   const hostels = useHostels();
   const coupons = useCoupons();
   const place = usePlaceOrder();
+  const pay = usePayForOrder();
   const saveAddress = useSaveDefaultAddress(identity.userId);
 
   const saved = readDefaultAddress(identity.profile);
@@ -58,6 +62,11 @@ export default function Checkout() {
   const [coupon, setCoupon] = useState('');
   const [saveAsDefault, setSaveAsDefault] = useState(saved === null);
   const [error, setError] = useState<string | null>(null);
+
+  // Asked once: whether the native sheet is compiled into this build does not change
+  // while the app runs. In Expo Go it is not, and the choice is simply not offered.
+  const [onlineAvailable] = useState(isOnlinePaymentAvailable);
+  const [method, setMethod] = useState<PaymentMethod>(onlineAvailable ? 'razorpay' : 'cod');
 
   /**
    * Generated once when checkout opens, not per submit. A double tap, or a retry
@@ -135,6 +144,7 @@ export default function Checkout() {
         // per-student limit, the total cap. This only decides what to send, and
         // sends nothing when the field is empty (rule 4).
         couponCode: code || null,
+        paymentMethod: method,
       });
 
       if (saveAsDefault) {
@@ -148,11 +158,25 @@ export default function Checkout() {
         }
       }
 
+      // A prepaid order now exists, unpaid, and the sheet opens on it. Whatever
+      // happens in there, the student lands on the order: it says whether the money
+      // arrived, and offers to try again if it did not. That is also why a failure to
+      // *open* the sheet is not shown here -- the order screen shows the same choice
+      // with a working retry, and staying on checkout would invite placing it twice.
+      let confirming = false;
+      if (method === 'razorpay') {
+        try {
+          confirming = (await pay.mutateAsync(orderId)).kind === 'submitted';
+        } catch {
+          /* the order screen offers "Pay" again */
+        }
+      }
+
       // Navigate first, then empty the cart. The guard above no longer watches the
       // cart, so this ordering is belt to its braces rather than the fix itself —
       // but it means that even if something here re-renders, the route has already
       // changed and there is no checkout screen left to redirect.
-      router.replace(`/order/${orderId}`);
+      router.replace(`/order/${orderId}${confirming ? '?confirming=1' : ''}`);
       clearCart();
     } catch (err) {
       setError(toAppError(err).userMessage);
@@ -171,9 +195,20 @@ export default function Checkout() {
            * stays visible however far down the form the student has scrolled (§10).
            */}
           <Button
-            label={`Place order · ${formatPaise(totals.totalPaise)}`}
+            label={
+              method !== 'razorpay'
+                ? `Place order · ${formatPaise(totals.totalPaise)}`
+                : code
+                  ? // The discount is `place_order`'s to decide (see the coupon card), so
+                    // with a code entered this screen does not know the amount. The sheet
+                    // does, and shows it; a figure here would overstate the charge.
+                    'Continue to payment'
+                  : `Pay ${formatPaise(totals.totalPaise)}`
+            }
             onPress={submit}
-            loading={place.isPending}
+            // Both steps, so the button stays busy from the tap until the sheet is up
+            // and a second tap cannot land in the gap between them.
+            loading={place.isPending || pay.isPending}
             disabled={!addressComplete}
           />
         </>
@@ -281,7 +316,28 @@ export default function Checkout() {
         <MoneyRow label="Subtotal" amountPaise={totals.subtotalPaise} />
         <MoneyRow label="Delivery" amountPaise={totals.deliveryFeePaise} />
         <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
-        <Badge label="Pay cash on delivery" tone="info" />
+        {onlineAvailable ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+            <Chip
+              label="Pay online · UPI, cards"
+              selected={method === 'razorpay'}
+              onPress={() => setMethod('razorpay')}
+            />
+            <Chip
+              label="Cash on delivery"
+              selected={method === 'cod'}
+              onPress={() => setMethod('cod')}
+            />
+          </View>
+        ) : (
+          <Badge label="Pay cash on delivery" tone="info" />
+        )}
+        {method === 'razorpay' ? (
+          <Body muted>
+            The canteen sees your order as soon as the payment is confirmed. If a coupon applies,
+            the payment screen shows the discounted total.
+          </Body>
+        ) : null}
       </Card>
     </Screen>
   );

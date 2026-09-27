@@ -24,6 +24,7 @@
     "db:seed:users": "node --env-file=.env supabase/seed-users.mjs",
     "db:push": "supabase db push",
     "db:types": "node scripts/gen-types.mjs",
+    "functions:sync": "node scripts/sync-function-shared.mjs",
     "db:lint": "supabase db lint --level warning",
     "dev:mobile": "npm run start --workspace @canteza/mobile",
     "dev:admin": "npm run dev --workspace @canteza/admin",

@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import type { NotificationWithOrder } from '@canteza/api';
 import {
   formatCampusDateTime,
+  notificationContext,
   orderNotification,
   toAppError,
   type NotificationAudience,
@@ -114,11 +115,11 @@ function NotificationRow({ row }: { row: NotificationWithOrder }) {
    * so the two can never say different things about one event.
    */
   const content = row.status
-    ? orderNotification(row.audience as NotificationAudience, row.status as OrderStatus, {
-        orderCode: row.orders?.code ?? 'your order',
-        canteenName: row.orders?.canteen_name_snapshot ?? 'the canteen',
-        hostelLabel: row.orders?.hostel_label ?? 'your room',
-      })
+    ? orderNotification(
+        row.audience as NotificationAudience,
+        row.status as OrderStatus,
+        notificationContext(row.orders),
+      )
     : null;
 
   // A status this audience has no wording for writes no row, so this is defensive

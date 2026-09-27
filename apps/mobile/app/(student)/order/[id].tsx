@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import type { OrderWithItems } from '@canteza/api';
+import { paymentOf, type OrderWithItems } from '@canteza/api';
 import {
+  awaitingPayment,
   canStudentCancel,
   formatPaise,
   isTerminal,
@@ -15,6 +16,7 @@ import {
   useOrder,
   useOrderReview,
   useOrdersRealtime,
+  usePayForOrder,
   useTransitionOrder,
 } from '../../../src/lib/queries';
 import { useIdentity } from '../../../src/lib/session';
@@ -45,10 +47,20 @@ import { useTheme } from '../../../src/theme';
  */
 export default function OrderTracker() {
   const t = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, confirming } = useLocalSearchParams<{ id: string; confirming?: string }>();
   const orderId = id ?? '';
-  const order = useOrder(orderId);
   const transition = useTransitionOrder();
+
+  // Set when the Razorpay sheet reported the student finished paying -- on checkout (the
+  // route param) or here. It is a hint to wait for the webhook, never a claim of payment.
+  const [confirmingSince, setConfirmingSince] = useState<number | null>(() =>
+    confirming ? Date.now() : null,
+  );
+  const order = useOrder(orderId, (current) =>
+    confirmingSince !== null && (!current || awaitingPayment(current.status, paymentOf(current)))
+      ? CONFIRM_POLL_MS
+      : false,
+  );
 
   useOrdersRealtime(orderId ? orderFilters.byId(orderId) : null);
 
@@ -73,6 +85,8 @@ export default function OrderTracker() {
   const data = order.data;
   const status = data.status as OrderStatus;
   const cancellable = canStudentCancel(status);
+  const payment = paymentOf(data);
+  const prepaid = payment !== null && payment.method !== 'cod';
 
   function cancel() {
     Alert.alert('Cancel this order?', 'The canteen has not started cooking yet.', [
@@ -102,6 +116,18 @@ export default function OrderTracker() {
         onBack={() => router.replace('/')}
         right={<StatusPill status={data.status} />}
       />
+
+      {/*
+       * First, because until it is settled nothing else on this screen is going to
+       * happen: an unpaid prepaid order is invisible to the kitchen.
+       */}
+      {awaitingPayment(status, payment) ? (
+        <PaymentPanel
+          order={data}
+          confirmingSince={confirmingSince}
+          onSubmitted={() => setConfirmingSince(Date.now())}
+        />
+      ) : null}
 
       {!isTerminal(status) ? (
         <Card>
@@ -133,7 +159,17 @@ export default function OrderTracker() {
         ) : null}
         <MoneyRow label="Delivery" amountPaise={data.delivery_fee_paise} />
         <MoneyRow label="Total" amountPaise={data.total_paise} strong />
-        <Badge label={`Pay ${formatPaise(data.total_paise)} in cash on delivery`} tone="info" />
+        {!prepaid ? (
+          <Badge label={`Pay ${formatPaise(data.total_paise)} in cash on delivery`} tone="info" />
+        ) : payment.status === 'success' ? (
+          <Badge label="✓ Paid online" tone="success" />
+        ) : payment.status === 'refunded' ? (
+          <Badge label="Refunded" tone="info" />
+        ) : refundOwed(payment.failure_reason) ? (
+          // `record_payment_result` writes this when money is captured for an order that
+          // was already cancelled. The student was charged; saying nothing would be worse.
+          <Badge label="Payment received after cancelling — it will be refunded" tone="info" />
+        ) : null}
       </Card>
 
       {data.cancellation_reason ? (
@@ -167,6 +203,114 @@ export default function OrderTracker() {
         onPress={() => router.push(`/support?order=${orderId}`)}
       />
     </Screen>
+  );
+}
+
+/** How often the tracker re-reads while waiting on the webhook, if realtime is quiet. */
+const CONFIRM_POLL_MS = 3000;
+
+/**
+ * How long "confirming" is shown before the screen offers to pay again. Razorpay's
+ * webhook normally lands in a few seconds; past this, a declined attempt the sheet did
+ * not report, or a webhook that is not arriving, is likelier than a slow one.
+ */
+const CONFIRM_PATIENCE_MS = 45_000;
+
+/** End a provider's message with exactly one terminal punctuation mark. */
+function sentence(text: string): string {
+  const trimmed = text.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+/** The marker `record_payment_result` leaves when a capture lands on a closed order. */
+function refundOwed(reason: string | null | undefined): boolean {
+  return Boolean(reason?.includes('refund required'));
+}
+
+/**
+ * The money, while it is still owed.
+ *
+ * Three states, all read from the server: confirming (the sheet said done, the webhook
+ * has not landed), failed (the webhook said declined), and not started. The last two
+ * look the same to a student -- the order is saved and the kitchen cannot see it -- so
+ * they share a button. Paying again reuses the same Razorpay order, so it is one bill
+ * however many attempts it takes.
+ */
+function PaymentPanel({
+  order,
+  confirmingSince,
+  onSubmitted,
+}: {
+  order: OrderWithItems;
+  confirmingSince: number | null;
+  onSubmitted: () => void;
+}) {
+  const pay = usePayForOrder();
+  const [error, setError] = useState<string | null>(null);
+  const [impatient, setImpatient] = useState(false);
+  const payment = paymentOf(order);
+
+  useEffect(() => {
+    setImpatient(false);
+    if (confirmingSince === null) return;
+    const remaining = CONFIRM_PATIENCE_MS - (Date.now() - confirmingSince);
+    if (remaining <= 0) {
+      setImpatient(true);
+      return;
+    }
+    const timer = setTimeout(() => setImpatient(true), remaining);
+    return () => clearTimeout(timer);
+  }, [confirmingSince]);
+
+  const failed = payment?.status === 'failed';
+  const confirming = confirmingSince !== null && !failed && !impatient;
+
+  function payNow() {
+    setError(null);
+    pay.mutate(order.id, {
+      onSuccess: (result) => {
+        if (result.kind === 'submitted') onSubmitted();
+      },
+      onError: (cause) => setError(toAppError(cause).userMessage),
+    });
+  }
+
+  if (confirming) {
+    return (
+      <Card>
+        <Badge label="Confirming payment…" tone="info" />
+        <Body>
+          This usually takes a few seconds. Your order goes to the kitchen as soon as the bank
+          confirms it.
+        </Body>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Heading level="heading">{failed ? 'Payment failed' : 'Payment not completed'}</Heading>
+      <Body muted>
+        {/*
+         * Razorpay's reasons are full sentences that already end in a full stop ("…
+         * Try another payment method."), so one is added only when it is missing.
+         */}
+        {failed && payment?.failure_reason ? `${sentence(payment.failure_reason)} ` : ''}
+        Your order is saved, but the canteen cannot see it until it is paid.
+      </Body>
+      {impatient && !failed ? (
+        <Body muted>
+          Still waiting to hear from the bank. If money has left your account, this updates by
+          itself.
+        </Body>
+      ) : null}
+      <FormError message={error} />
+      <Button
+        label={`Pay ${formatPaise(order.total_paise)}`}
+        onPress={payNow}
+        loading={pay.isPending}
+      />
+    </Card>
   );
 }
 

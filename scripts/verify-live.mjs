@@ -56,6 +56,12 @@ let restoreHours = null;
 let removeTestDish = null;
 /** Favourites can be deleted by their owner, so this one always is. */
 let removeTestFavorite = null;
+/**
+ * Everyone, once §1 has signed them all in. Sections that stand alone run from the end
+ * of the chain below rather than the end of `main`, which returns early whenever a
+ * section it needs cannot run -- and that must not silently skip an unrelated one.
+ */
+let signedIn = null;
 
 function ok(label) {
   checks += 1;
@@ -114,6 +120,7 @@ async function main() {
     console.error('\nCannot continue without sessions. Has `npm run db:seed:users` run?');
     return;
   }
+  signedIn = people;
 
   // getIdentity's own query: role comes from the database, never from a JWT claim.
   const { data: riyaProfile } = await people.riya.client
@@ -792,9 +799,222 @@ async function main() {
     Boolean(writeTransition),
     'the insert was accepted',
   );
+
+  // -------------------------------------------------------------------------
+  section('11. Online checkout');
+  // -------------------------------------------------------------------------
+  // A real prepaid order, as the app places one. The database half is checked on every
+  // run. The `create-payment` half needs the Edge Function deployed with Razorpay test
+  // keys; until it is, those checks say they were skipped rather than pretending to pass.
+
+  const { data: prepaidId, error: prepaidError } = await people.riya.client.rpc('place_order', {
+    p_canteen_id: canteenId,
+    p_items: menu.map((item) => ({ item_id: item.id, quantity: 2 })),
+    p_hostel_id: hostel.id,
+    p_block: hostel.blocks?.[0] ?? 'A',
+    p_room: '214',
+    p_idempotency_key: `verify-prepaid-${Date.now()}`,
+    p_note: 'live verification',
+    p_payment_method: 'razorpay',
+  });
+  check('the student places a prepaid order', Boolean(prepaidId), prepaidError?.message);
+  if (!prepaidId) return;
+
+  try {
+    const { data: counterInbox } = await people.mainCanteen.client
+      .from('notifications')
+      .select('id')
+      .eq('order_id', prepaidId);
+    check(
+      'the counter is not paged for an order nobody has paid for',
+      Array.isArray(counterInbox) && counterInbox.length === 0,
+      `saw ${counterInbox?.length ?? 'no'} notifications`,
+    );
+
+    const { data: embedded } = await people.mainCanteen.client
+      .from('orders')
+      .select('id, payments(method, status)')
+      .eq('id', prepaidId)
+      .single();
+    const embeddedPayment = Array.isArray(embedded?.payments)
+      ? embedded.payments[0]
+      : embedded?.payments;
+    check(
+      'the counter can read the payment it needs to hide the order by',
+      embeddedPayment?.method === 'razorpay' && embeddedPayment?.status === 'initiated',
+      `saw ${JSON.stringify(embedded?.payments)}`,
+    );
+
+    const invoke = (person, body) =>
+      people[person].client.functions.invoke('create-payment', { body });
+    const statusOf = (error) => error?.context?.status;
+
+    const first = await invoke('riya', { orderId: prepaidId });
+    if (statusOf(first.error) === 404) {
+      // Our function answers `{ error: { code } }`; the platform's own 404 for a function
+      // that does not exist is `{ code, message }`. Only the second is "not deployed" --
+      // the first, for the student's own open order, is a real failure.
+      const body = await first.error.context.json().catch(() => ({}));
+      if (!body?.error) {
+        console.log('  - create-payment is not deployed; its checks are skipped');
+        return;
+      }
+    }
+    if (statusOf(first.error) === 503) {
+      console.log('  - create-payment is deployed without Razorpay keys; its checks are skipped');
+      return;
+    }
+
+    const { data: row } = await people.riya.client
+      .from('payments')
+      .select('amount_paise')
+      .eq('order_id', prepaidId)
+      .single();
+    check(
+      'create-payment opens a Razorpay order for the amount on our own row',
+      typeof first.data?.providerOrderId === 'string' &&
+        first.data.providerOrderId.startsWith('order_') &&
+        first.data.amountPaise === row?.amount_paise &&
+        typeof first.data.keyId === 'string' &&
+        first.data.keyId.startsWith('rzp_'),
+      first.error ? `status ${statusOf(first.error)}` : JSON.stringify(first.data),
+    );
+    check(
+      'it hands the app a test key, never a live one, from this script',
+      first.data?.keyId?.startsWith('rzp_test_') === true,
+      'the deployed key id is not a test-mode key',
+    );
+
+    const second = await invoke('riya', { orderId: prepaidId });
+    check(
+      'asking again reuses the same Razorpay order — one bill, however many taps',
+      second.data?.providerOrderId === first.data?.providerOrderId,
+      `${first.data?.providerOrderId} then ${second.data?.providerOrderId}`,
+    );
+
+    const stranger = await invoke('arjun', { orderId: prepaidId });
+    check(
+      "another student cannot open a sheet on someone else's order",
+      statusOf(stranger.error) === 404,
+      `expected 404, saw ${statusOf(stranger.error) ?? 'success'}`,
+    );
+
+    const counter = await invoke('mainCanteen', { orderId: prepaidId });
+    check(
+      'nor can the canteen, which can read the order but does not pay for it',
+      statusOf(counter.error) === 404,
+      `expected 404, saw ${statusOf(counter.error) ?? 'success'}`,
+    );
+
+    const anonymous = await createClient(URL_BASE, ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }).functions.invoke('create-payment', { body: { orderId: prepaidId } });
+    check(
+      'nobody signed out can start a payment',
+      statusOf(anonymous.error) === 401,
+      `expected 401, saw ${statusOf(anonymous.error) ?? 'success'}`,
+    );
+  } finally {
+    // The student cancels, as they would. That also proves the order cannot be paid
+    // for afterwards, which is the begin_razorpay_payment guard over real HTTP.
+    await people.riya.client.rpc('transition_order', {
+      p_order_id: prepaidId,
+      p_to: 'cancelled',
+      p_reason: 'live verification',
+    });
+  }
+
+  const afterCancel = await people.riya.client.functions.invoke('create-payment', {
+    body: { orderId: prepaidId },
+  });
+  const afterStatus = afterCancel.error?.context?.status;
+  check(
+    'a cancelled order cannot be paid for',
+    afterStatus === 409,
+    `expected 409, saw ${afterStatus ?? 'success'}`,
+  );
+}
+
+/**
+ * §12. Push devices, with real sign-ins. A made-up but well-formed token stands in for a
+ * phone: Expo never sees it, and the section deletes it however it ends.
+ */
+async function verifyPushTokens(people) {
+  section('12. Push devices');
+
+  const token = `ExponentPushToken[verify-live-${Date.now()}]`;
+  const register = (person) =>
+    people[person].client.rpc('register_push_token', { p_token: token, p_platform: 'android' });
+  const visibleTo = async (person) => {
+    const { data } = await people[person].client
+      .from('push_tokens')
+      .select('token')
+      .eq('token', token);
+    return (data ?? []).length === 1;
+  };
+
+  const { error: registerError } = await register('riya');
+  if (registerError?.message?.includes('register_push_token')) {
+    console.log('  - push_tokens migration is not pushed; §12 is skipped');
+    return;
+  }
+  try {
+    check('a student registers their device', !registerError, registerError?.message);
+    check('and can see it', await visibleTo('riya'));
+    check('another student cannot see it', !(await visibleTo('arjun')));
+
+    const { error: insertError } = await people.arjun.client
+      .from('push_tokens')
+      .insert({ token: `${token}x`, user_id: people.riya.userId, platform: 'android' });
+    check(
+      'nobody can insert a device row directly, for themselves or anyone else',
+      insertError?.code === '42501',
+      `expected 42501, saw ${insertError?.code ?? 'no error at all'}`,
+    );
+
+    // The phone changes hands: arjun signs in on it.
+    const { error: moveError } = await register('arjun');
+    check(
+      'signing in on a device moves it to the new person',
+      !moveError && (await visibleTo('arjun')) && !(await visibleTo('riya')),
+      moveError?.message ?? 'the device did not move',
+    );
+
+    const { error: strangerDelete } = await people.riya.client
+      .from('push_tokens')
+      .delete()
+      .eq('token', token);
+    check(
+      'the previous owner cannot remove it any more',
+      !strangerDelete && (await visibleTo('arjun')),
+      strangerDelete?.message ?? 'the delete reached a device they no longer own',
+    );
+  } finally {
+    await people.arjun.client.from('push_tokens').delete().eq('token', token);
+    await people.riya.client.from('push_tokens').delete().eq('token', token);
+  }
+  check('its owner removes it at sign-out', !(await visibleTo('arjun')));
+
+  // send-push takes a shared secret, not a session. Without it, nothing is sent.
+  const unsigned = await people.riya.client.functions.invoke('send-push', {
+    body: { type: 'INSERT', table: 'notifications', record: {} },
+  });
+  const status = unsigned.error?.context?.status;
+  if (status === 404) {
+    console.log('  - send-push is not deployed; its check is skipped');
+  } else {
+    check(
+      'send-push refuses a caller without the webhook secret',
+      status === 401,
+      `expected 401, saw ${status ?? 'success'}`,
+    );
+  }
 }
 
 main()
+  .then(async () => {
+    if (signedIn) await verifyPushTokens(signedIn);
+  })
   .catch((error) => {
     failures += 1;
     console.error(`\nUnhandled: ${error.message}`);

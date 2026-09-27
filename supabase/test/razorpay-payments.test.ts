@@ -197,22 +197,49 @@ describe('recording a result', () => {
 });
 
 describe('retrying after a failure', () => {
-  it('lets a student start a fresh attempt, which the state machine allows', async () => {
+  it('reuses the same Razorpay order, which accepts attempts until one is captured', async () => {
     const orderId = await prepaidOrder('order_retry_1');
     const amount = (await paymentFor(orderId))!.amount_paise;
     await record('order_retry_1', 'pay_r1', 'failed', amount, 'Card declined');
 
+    // The Edge Function passes whatever id it has; the one already attached wins.
     await db.asOwner();
-    await db.query(`select public.begin_razorpay_payment($1::uuid, $2)`, [
-      orderId,
-      'order_retry_1b',
-    ]);
+    const { rows } = await db.query<{ effective: string }>(
+      `select public.begin_razorpay_payment($1::uuid, $2) as effective`,
+      [orderId, 'order_retry_1b'],
+    );
+    expect(rows[0]!.effective).toBe('order_retry_1');
 
     const payment = await paymentFor(orderId);
     expect(payment?.status).toBe('initiated');
     expect(payment?.failure_reason).toBeNull();
 
-    expect(await record('order_retry_1b', 'pay_r2', 'success', amount)).toBe('PAID');
+    expect(await record('order_retry_1', 'pay_r2', 'success', amount)).toBe('PAID');
+    expect((await paymentFor(orderId))?.status).toBe('success');
+  });
+
+  it('accepts a second card tried inside the same sheet, with no begin in between', async () => {
+    // The bug the checkout migration exists for. Razorpay's sheet offers a retry after
+    // a decline without closing, so the capture of attempt two arrives while our row
+    // still says `failed` from attempt one. It used to come back STALE_EVENT: money
+    // taken, order never released to the kitchen.
+    const orderId = await prepaidOrder('order_retry_sheet');
+    const amount = (await paymentFor(orderId))!.amount_paise;
+
+    expect(await record('order_retry_sheet', 'pay_s1', 'failed', amount, 'Card declined')).toBe(
+      'FAILED',
+    );
+    expect(await record('order_retry_sheet', 'pay_s2', 'success', amount)).toBe('PAID');
+
+    const payment = await paymentFor(orderId);
+    expect(payment?.status).toBe('success');
+    expect(payment?.provider_payment_id).toBe('pay_s2');
+    expect(payment?.failure_reason).toBeNull();
+
+    // And attempt one's failure, redelivered late, does not undo it.
+    expect(await record('order_retry_sheet', 'pay_s1', 'failed', amount, 'Card declined')).toBe(
+      'STALE_EVENT',
+    );
     expect((await paymentFor(orderId))?.status).toBe('success');
   });
 
@@ -225,6 +252,146 @@ describe('retrying after a failure', () => {
     await expect(
       db.query(`select public.begin_razorpay_payment($1::uuid, $2)`, [orderId, 'order_retry_2b']),
     ).rejects.toThrow(/no payment awaiting checkout/);
+  });
+});
+
+/** A prepaid order with no Razorpay order attached yet, as `create-payment` finds it. */
+async function freshPrepaidOrder(label: string, method = 'razorpay'): Promise<string> {
+  await db.asUser(campus.student);
+  return placeOrder(db, {
+    canteen: campus.mainCanteen,
+    hostel: campus.hostel,
+    items: [{ item_id: maggi, quantity: 2 }],
+    key: `rzp-${label}-${counter++}`,
+    method,
+  });
+}
+
+describe('begin_razorpay_payment', () => {
+  it('lets the first Razorpay order win when two taps race', async () => {
+    const orderId = await freshPrepaidOrder('race');
+
+    await db.asOwner();
+    const first = await db.query<{ id: string }>(
+      `select public.begin_razorpay_payment($1::uuid, 'order_race_a') as id`,
+      [orderId],
+    );
+    const second = await db.query<{ id: string }>(
+      `select public.begin_razorpay_payment($1::uuid, 'order_race_b') as id`,
+      [orderId],
+    );
+
+    // Both callers open the sheet on the same Razorpay order, so whichever one the
+    // student pays on, the webhook finds our row. Before, the second overwrote the
+    // first, and paying on the first sheet came back UNKNOWN_ORDER forever.
+    expect(first.rows[0]!.id).toBe('order_race_a');
+    expect(second.rows[0]!.id).toBe('order_race_a');
+  });
+
+  it('refuses an order the student already cancelled', async () => {
+    const orderId = await freshPrepaidOrder('cancelled');
+    await db.query(`select public.transition_order($1::uuid, 'cancelled', 'changed my mind')`, [
+      orderId,
+    ]);
+
+    await db.asOwner();
+    await expect(
+      db.query(`select public.begin_razorpay_payment($1::uuid, 'order_too_late')`, [orderId]),
+    ).rejects.toThrow(/INVALID_TRANSITION: .* is cancelled/);
+  });
+
+  it('refuses a cash order, which has nothing to open a sheet for', async () => {
+    const orderId = await freshPrepaidOrder('cash', 'cod');
+
+    await db.asOwner();
+    await expect(
+      db.query(`select public.begin_razorpay_payment($1::uuid, 'order_cash')`, [orderId]),
+    ).rejects.toThrow(/no payment awaiting checkout/);
+  });
+});
+
+describe('money that arrives after the order is gone', () => {
+  it('is kept and reported as REFUND_REQUIRED, not dismissed as stale', async () => {
+    const orderId = await prepaidOrder('order_late');
+    const amount = (await paymentFor(orderId))!.amount_paise;
+
+    // The student cancels while their bank is still processing.
+    await db.asUser(campus.student);
+    await db.query(`select public.transition_order($1::uuid, 'cancelled', 'changed my mind')`, [
+      orderId,
+    ]);
+
+    expect(await record('order_late', 'pay_late', 'success', amount)).toBe('REFUND_REQUIRED');
+
+    const payment = await paymentFor(orderId);
+    // Still failed -- there is no legal move to success on a cancelled order -- but the
+    // payment id is on the row, so the charge can be found and refunded.
+    expect(payment?.status).toBe('failed');
+    expect(payment?.provider_payment_id).toBe('pay_late');
+    expect(payment?.failure_reason).toMatch(/refund required/);
+    expect(await orderStatus(orderId)).toBe('cancelled');
+
+    // A redelivery says the same thing again rather than something new.
+    expect(await record('order_late', 'pay_late', 'success', amount)).toBe('REFUND_REQUIRED');
+  });
+});
+
+describe('who hears about a prepaid order, and when', () => {
+  async function notificationsFor(orderId: string, audience: string): Promise<number> {
+    await db.asOwner();
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*) as n from public.notifications
+        where order_id = $1::uuid and audience = $2`,
+      [orderId, audience],
+    );
+    return Number(rows[0]!.n);
+  }
+
+  it('does not page the counter for an order nobody has paid for', async () => {
+    const orderId = await prepaidOrder('order_quiet');
+    expect(await notificationsFor(orderId, 'canteen')).toBe(0);
+    // The student still hears that it was placed.
+    expect(await notificationsFor(orderId, 'student')).toBe(1);
+  });
+
+  it('pages the counter the moment the money lands, and only once', async () => {
+    const orderId = await prepaidOrder('order_loud');
+    const amount = (await paymentFor(orderId))!.amount_paise;
+
+    await record('order_loud', 'pay_loud', 'success', amount);
+    const afterPaid = await notificationsFor(orderId, 'canteen');
+    expect(afterPaid).toBeGreaterThan(0);
+
+    await record('order_loud', 'pay_loud', 'success', amount); // Razorpay redelivers
+    expect(await notificationsFor(orderId, 'canteen')).toBe(afterPaid);
+  });
+
+  it('touches the order, which is what wakes every realtime subscriber', async () => {
+    const orderId = await prepaidOrder('order_touch');
+    const amount = (await paymentFor(orderId))!.amount_paise;
+
+    await db.asOwner();
+    // Back-dating needs the trigger out of the way, or it stamps now() over it.
+    await db.query(`alter table public.orders disable trigger orders_touch`);
+    await db.query(
+      `update public.orders set updated_at = now() - interval '1 hour' where id = $1::uuid`,
+      [orderId],
+    );
+    await db.query(`alter table public.orders enable trigger orders_touch`);
+
+    await record('order_touch', 'pay_touch', 'success', amount);
+
+    const { rows } = await db.query<{ fresh: boolean }>(
+      `select updated_at > now() - interval '1 minute' as fresh
+         from public.orders where id = $1::uuid`,
+      [orderId],
+    );
+    expect(rows[0]!.fresh).toBe(true);
+  });
+
+  it('still pages the counter at placement for cash, which is work immediately', async () => {
+    const orderId = await freshPrepaidOrder('cod-notify', 'cod');
+    expect(await notificationsFor(orderId, 'canteen')).toBeGreaterThan(0);
   });
 });
 

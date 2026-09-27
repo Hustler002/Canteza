@@ -3,6 +3,7 @@ import { getIdentity, queryKeys, type Identity } from '@canteza/api';
 import { toAppError, type AppError } from '@canteza/shared';
 import { supabase } from './supabase';
 import { queryClient } from './query';
+import { unregisterForPush } from './push';
 
 /**
  * Who is signed in, and what they are allowed to see.
@@ -67,6 +68,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       identity,
       error,
       signOut: async () => {
+        // First, while the session still exists: removing the device is the owner
+        // deleting their own row, and after sign-out there is no owner to ask.
+        await unregisterForPush();
         await supabase.auth.signOut();
         queryClient.clear();
         setIdentity(null);

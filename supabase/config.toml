@@ -384,6 +384,22 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Both payment functions do their own authentication, so the gateway's is switched off.
+# verify-payment: Razorpay's webhook carries an HMAC signature, never a Supabase JWT, so
+#   a gateway check would answer 401 to every genuine webhook.
+# create-payment: checks the caller with auth.getUser(), which asks the Auth server and
+#   works with any JWT signing keys; the gateway check understands only the legacy secret.
+# See supabase/functions/README.md.
+[functions.verify-payment]
+verify_jwt = false
+
+[functions.create-payment]
+verify_jwt = false
+
+# send-push: called by a Database Webhook, authenticated by the PUSH_WEBHOOK_SECRET header.
+[functions.send-push]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

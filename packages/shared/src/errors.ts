@@ -26,6 +26,7 @@ export const ERROR_CODES = {
   DUPLICATE_REQUEST: 'DUPLICATE_REQUEST',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   PAYMENT_UNVERIFIED: 'PAYMENT_UNVERIFIED',
+  PAYMENT_UNAVAILABLE: 'PAYMENT_UNAVAILABLE',
   NETWORK: 'NETWORK',
   UNKNOWN: 'UNKNOWN',
 } as const;
@@ -60,6 +61,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   DUPLICATE_REQUEST: 'That was already submitted.',
   PAYMENT_FAILED: 'Payment did not go through. You have not been charged.',
   PAYMENT_UNVERIFIED: "We're still confirming your payment. This usually takes a few seconds.",
+  PAYMENT_UNAVAILABLE:
+    "Online payment isn't available right now. Try again, or pay cash on delivery.",
   NETWORK: 'Network problem. Check your connection and try again.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };

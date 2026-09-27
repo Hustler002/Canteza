@@ -23,7 +23,18 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#E8590C",
+          "defaultChannel": "orders"
+        }
+      ]
+    ],
     "scheme": "canteza",
     "extra": {
       "supabaseUrl": "$SUPABASE_URL",

@@ -38,16 +38,21 @@ import {
   removeFavorite,
   saveDefaultAddress,
   setOnline,
+  startCheckout,
   subscribeToNotifications,
   subscribeToOrders,
   summariseDeliveries,
   transitionOrder,
   updateMenuItem,
   type DefaultAddress,
+  type OrderWithItems,
   type PlaceOrderInput,
 } from '@canteza/api';
-import type { Insert, OrderStatus, Update } from '@canteza/shared';
+import { BRAND, type Insert, type OrderStatus, type Update } from '@canteza/shared';
 import { supabase } from './supabase';
+import { openRazorpaySheet, type SheetResult } from './razorpay';
+import { useIdentity } from './session';
+import { useTheme } from '../theme';
 
 /**
  * Typed data hooks. Screens call these; no screen touches `supabase` directly.
@@ -145,11 +150,21 @@ export function useMyOrders() {
   });
 }
 
-export function useOrder(orderId: string) {
+/**
+ * `pollMs` is a fallback, not the mechanism. Realtime already refetches an order the
+ * moment it changes; polling covers the one wait where a dropped socket would leave a
+ * student staring at "confirming" -- the seconds between the Razorpay sheet closing and
+ * the webhook landing. Return `false` to stop.
+ */
+export function useOrder(
+  orderId: string,
+  pollMs?: (order: OrderWithItems | null | undefined) => number | false,
+) {
   return useQuery({
     queryKey: queryKeys.order(orderId),
     queryFn: () => getOrder(supabase, orderId),
     enabled: Boolean(orderId),
+    refetchInterval: pollMs ? (query) => pollMs(query.state.data) : false,
   });
 }
 
@@ -222,6 +237,38 @@ export function usePlaceOrder() {
   return useMutation({
     mutationFn: (input: PlaceOrderInput) => placeOrder(supabase, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: invalidationRoots.orders });
+    },
+  });
+}
+
+/**
+ * Pay for one of the student's own orders: ask the server for a Razorpay order, open
+ * the sheet on it, and refetch.
+ *
+ * Resolves with what the student did in the sheet, not with whether they paid -- the
+ * webhook decides that, and the order query is how the screen finds out. So this never
+ * touches the cache except to invalidate it.
+ */
+export function usePayForOrder() {
+  const identity = useIdentity();
+  const t = useTheme();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string): Promise<SheetResult> => {
+      const session = await startCheckout(supabase, orderId);
+      return openRazorpaySheet(session, {
+        brandName: BRAND.name,
+        description: `Order ${session.orderCode}`,
+        color: t.color.primary,
+        prefill: {
+          name: identity.profile.full_name,
+          email: identity.email,
+          contact: identity.profile.phone,
+        },
+      });
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: invalidationRoots.orders });
     },
   });

@@ -800,6 +800,38 @@ export type Database = {
         },
       ];
     };
+    push_tokens: {
+      Row: {
+        token: string;
+        user_id: string;
+        platform: string;
+        created_at: string;
+        last_seen_at: string;
+      };
+      Insert: {
+        token: string;
+        user_id: string;
+        platform: string;
+        created_at?: string;
+        last_seen_at?: string;
+      };
+      Update: {
+        token?: string;
+        user_id?: string;
+        platform?: string;
+        created_at?: string;
+        last_seen_at?: string;
+      };
+      Relationships: [
+        {
+          foreignKeyName: 'push_tokens_user_id_fkey';
+          columns: ['user_id'];
+          isOneToOne: false;
+          referencedRelation: 'profiles';
+          referencedColumns: ['id'];
+        },
+      ];
+    };
     reviews: {
       Row: {
         id: string;
@@ -1037,7 +1069,7 @@ export type Database = {
         p_order_id: string | null;
         p_provider_order_id: string | null;
       };
-      Returns: undefined;
+      Returns: string;
     };
     campus_now: {
       Args: Record<PropertyKey, never>;
@@ -1117,6 +1149,13 @@ export type Database = {
         p_failure_reason?: string | null;
       };
       Returns: string;
+    };
+    register_push_token: {
+      Args: {
+        p_token: string | null;
+        p_platform: string | null;
+      };
+      Returns: undefined;
     };
     release_delivery: {
       Args: {

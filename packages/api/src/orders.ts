@@ -1,4 +1,10 @@
-import type { OrderStatus, Row } from '@canteza/shared';
+import {
+  awaitingPayment,
+  type OrderStatus,
+  type PaymentMethod,
+  type PaymentSummary,
+  type Row,
+} from '@canteza/shared';
 import type { CampusClient } from './client';
 import { unwrap, unwrapList, unwrapRequired } from './errors';
 
@@ -12,9 +18,36 @@ import { unwrap, unwrapList, unwrapRequired } from './errors';
 
 export type Order = Row<'orders'>;
 export type OrderItem = Row<'order_items'>;
-export type OrderWithItems = Order & { order_items: OrderItem[] };
+export type OrderWithItems = Order & {
+  order_items: OrderItem[];
+  /**
+   * `payments.order_id` is unique, so PostgREST embeds this as one object. Typed as
+   * either shape anyway, because that detection is PostgREST's to change; read it
+   * through `paymentOf` and never directly.
+   */
+  payments?: PaymentSummary | PaymentSummary[] | null;
+};
 
-const ORDER_WITH_ITEMS = '*, order_items(*)';
+/**
+ * Every order read carries where its money is. The student's tracker needs it to ask
+ * for payment, and the counter's board needs it to leave unpaid prepaid orders off the
+ * New tab -- and `payments_read` already lets whoever can read the order read this.
+ */
+const ORDER_WITH_ITEMS = '*, order_items(*), payments(method, status, failure_reason)';
+
+/** The order's payment, whichever shape PostgREST embedded it in. */
+export function paymentOf(order: {
+  payments?: OrderWithItems['payments'] | undefined;
+}): PaymentSummary | null {
+  const embedded = order.payments;
+  if (Array.isArray(embedded)) return embedded[0] ?? null;
+  return embedded ?? null;
+}
+
+/** The counter's view: a prepaid order is not work until it is paid for. */
+function isKitchenWork(order: { status: string; payments?: OrderWithItems['payments'] }) {
+  return !awaitingPayment(order.status, paymentOf(order));
+}
 
 export type PlaceOrderInput = {
   canteenId: string;
@@ -30,6 +63,8 @@ export type PlaceOrderInput = {
   idempotencyKey: string;
   note?: string;
   couponCode?: string | null;
+  /** Defaults to cash. The amount charged online is still decided by `place_order`. */
+  paymentMethod?: PaymentMethod;
 };
 
 /** Returns the new order's id, or the existing one if this key was already used. */
@@ -46,9 +81,9 @@ export async function placeOrder(client: CampusClient, input: PlaceOrderInput): 
       // The key is omitted rather than set to undefined: exactOptionalPropertyTypes
       // makes those different, and PostgREST would send an explicit null.
       ...(input.couponCode ? { p_coupon_code: input.couponCode } : {}),
-      // COD is the only settled method until Razorpay lands in Phase 8; a prepaid
-      // order is blocked from being accepted until payment verifies (ADR 006).
-      p_payment_method: 'cod',
+      // A prepaid order is placed unpaid and cannot be accepted until the webhook
+      // verifies the money (ADR 006). Choosing it here asserts nothing about payment.
+      p_payment_method: input.paymentMethod ?? 'cod',
     }),
     'place_order',
   );
@@ -137,12 +172,14 @@ export async function countOrdersByStatus(
   const rows = await unwrapList(
     client
       .from('orders')
-      .select('status')
+      .select('status, payments(method, status)')
       .in('status', statuses as unknown as string[]),
   );
 
   const counts: Record<string, number> = {};
-  for (const row of rows as Array<{ status: string }>) {
+  for (const row of rows as Array<{ status: string; payments?: OrderWithItems['payments'] }>) {
+    // The same rule as the list below, or the badge would count orders the tab hides.
+    if (!isKitchenWork(row)) continue;
     counts[row.status] = (counts[row.status] ?? 0) + 1;
   }
   return counts;
@@ -153,14 +190,19 @@ export async function listCanteenOrders(
   statuses: readonly OrderStatus[],
   limit = 50,
 ): Promise<OrderWithItems[]> {
-  return unwrapList(
+  const rows = (await unwrapList(
     client
       .from('orders')
       .select(ORDER_WITH_ITEMS)
       .in('status', statuses as unknown as string[])
       .order('created_at', { ascending: false })
       .limit(limit),
-  ) as Promise<OrderWithItems[]>;
+  )) as OrderWithItems[];
+  // Presentation, not permission: `transition_order` refuses to accept an unpaid
+  // prepaid order whatever this list shows. Hiding it means the order appears on the
+  // New tab at the moment it becomes something the counter can act on, which is also
+  // the moment their notification arrives (see notify_order).
+  return rows.filter(isKitchenWork);
 }
 
 export async function getOrderHistory(

@@ -93,3 +93,26 @@ export async function markAllNotificationsRead(client: CampusClient): Promise<vo
       .select('id'),
   );
 }
+
+/**
+ * Push: tell the server this device belongs to the signed-in person.
+ *
+ * An RPC rather than an insert, because a device that someone else used last must be
+ * taken from them, and no policy may let a client write a row it does not own. Called on
+ * every app start; the same token and person just refresh `last_seen_at`.
+ */
+export async function registerPushToken(
+  client: CampusClient,
+  token: string,
+  platform: 'android' | 'ios',
+): Promise<void> {
+  await unwrap(client.rpc('register_push_token', { p_token: token, p_platform: platform }));
+}
+
+/**
+ * Stop pushing to this device. Run *before* signing out: it is the owner deleting their
+ * own row, so it needs the session that is about to end.
+ */
+export async function unregisterPushToken(client: CampusClient, token: string): Promise<void> {
+  await unwrap(client.from('push_tokens').delete().eq('token', token));
+}

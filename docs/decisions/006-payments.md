@@ -90,3 +90,26 @@ an order paid because the frontend said so.
 - No client, mobile or web, may write to `payments`. RLS grants select-own only.
 - Refunds in the MVP are recorded in the database and executed manually by an admin. A
   Razorpay refund API call can replace the manual step without a schema change.
+
+## Addendum (Phase 8): the checkout
+
+The seam held; three things were added to it rather than changed.
+
+- **A second Edge Function, `create-payment`.** The sheet needs a Razorpay order and
+  creating one needs the key secret, so the app asks the server with an order id and
+  nothing else. It reads the amount from our own `payments` row. This does not weaken
+  the rule above: `create-payment` arranges for there to be something to pay and never
+  declares anything paid. `verify-payment` is still the only writer of `success`.
+- **One Razorpay order per order, reused for every attempt.** A retry after a declined
+  card goes back to the same Razorpay order, which accepts attempts until one is
+  captured. `record_payment_result` therefore accepts `failed -> initiated -> success`
+  while the order is still `pending` — a second card tried inside the same sheet
+  arrives exactly that way, and was being dropped as a stale event.
+- **`REFUND_REQUIRED`.** Money captured against an order that is already cancelled is
+  kept on the row and reported, not dismissed. It is the first concrete case of the
+  manual refund this ADR anticipated.
+
+A prepaid order that is not yet paid is **not work**: `transition_order` refuses to
+accept it (unchanged), `notify_order` no longer pages the counter for it, and the
+counter's board hides it. All three use the same condition, `awaitingPayment` in
+`packages/shared/src/payment.ts`.
