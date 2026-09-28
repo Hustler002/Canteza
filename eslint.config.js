@@ -43,10 +43,16 @@ export default tseslint.config(
     ignores: ['supabase/functions/*/index.ts'],
   },
   {
-    // CommonJS build config that Metro and Babel load directly, not through the bundler.
-    files: ['apps/*/metro.config.js', 'apps/*/babel.config.js'],
+    // CommonJS build config that Metro, Babel and Expo load directly, not through the
+    // bundler. app.config.js also reads process.env: it runs at build time, in Node.
+    files: ['apps/*/metro.config.js', 'apps/*/babel.config.js', 'apps/*/app.config.js'],
     languageOptions: {
-      globals: { module: 'writable', require: 'readonly', __dirname: 'readonly' },
+      globals: {
+        module: 'writable',
+        require: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
     },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },

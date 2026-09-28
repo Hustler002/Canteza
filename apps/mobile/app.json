@@ -33,6 +33,13 @@
           "color": "#E8590C",
           "defaultChannel": "orders"
         }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "organization": "moneytrail",
+          "project": "canteza-mobile"
+        }
       ]
     ],
     "scheme": "canteza",

@@ -831,6 +831,16 @@ async function main() {
       `saw ${counterInbox?.length ?? 'no'} notifications`,
     );
 
+    const { data: studentInbox } = await people.riya.client
+      .from('notifications')
+      .select('id')
+      .eq('order_id', prepaidId);
+    check(
+      'nor is the student told it was placed, until it is paid for',
+      Array.isArray(studentInbox) && studentInbox.length === 0,
+      `saw ${studentInbox?.length ?? 'no'} notifications — has the prepaid-notification migration been pushed?`,
+    );
+
     const { data: embedded } = await people.mainCanteen.client
       .from('orders')
       .select('id, payments(method, status)')

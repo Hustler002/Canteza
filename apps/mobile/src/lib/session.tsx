@@ -1,9 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Alert } from 'react-native';
 import { getIdentity, queryKeys, type Identity } from '@canteza/api';
 import { toAppError, type AppError } from '@canteza/shared';
 import { supabase } from './supabase';
 import { queryClient } from './query';
 import { unregisterForPush } from './push';
+import { signOutConsequence } from './sign-out';
+import { identify } from './sentry';
+import { useCart } from '../store/cart';
 
 /**
  * Who is signed in, and what they are allowed to see.
@@ -24,6 +28,22 @@ type SessionState = {
 
 const SessionContext = createContext<SessionState | null>(null);
 
+/**
+ * Everything one account leaves on the phone, dropped when they leave it.
+ *
+ * The query cache is the obvious half. The cart is the other: it is persisted to
+ * AsyncStorage so a hostel phone killing the app does not lose a half-built order, which
+ * also means it outlives a sign-out -- and the next student on a shared phone would open
+ * the app to someone else's basket. Harmless while only counter and delivery accounts
+ * could sign out, since neither has a cart; not once students can.
+ */
+function clearAccountState(): void {
+  queryClient.clear();
+  useCart.getState().clear();
+  // Events after sign-out must not be filed against the person who just left.
+  identify(null);
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -32,7 +52,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function load(): Promise<void> {
     try {
       setError(null);
-      setIdentity(await getIdentity(supabase));
+      const next = await getIdentity(supabase);
+      setIdentity(next);
+      identify(next ? { userId: next.userId, role: next.role } : null);
     } catch (err) {
       setError(toAppError(err));
       setIdentity(null);
@@ -53,7 +75,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setIdentity(null);
         // Another account's data must not be sitting in the cache when the next
         // person signs in on the same phone.
-        queryClient.clear();
+        clearAccountState();
         return;
       }
       void load();
@@ -72,7 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // deleting their own row, and after sign-out there is no owner to ask.
         await unregisterForPush();
         await supabase.auth.signOut();
-        queryClient.clear();
+        clearAccountState();
         setIdentity(null);
       },
       refresh: async () => {
@@ -85,6 +107,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+/**
+ * Sign out, after asking. **Every sign-out control calls this, never `signOut` directly**
+ * -- `apps/mobile/test/sign-out.test.ts` holds that on the source.
+ *
+ * Each screen used to wire its own, and they drifted: the student's asked, the counter's
+ * and the delivery partner's signed out on a single stray tap. The button sits in a header
+ * a thumb crosses constantly, and signing out is not free -- this phone stops getting the
+ * account's notifications, and a student's cart is emptied -- so the prompt says what
+ * will actually happen, for the role actually signed in.
+ */
+export function useConfirmSignOut(): () => void {
+  const { signOut, identity } = useSession();
+
+  return () => {
+    Alert.alert('Sign out?', signOutConsequence(identity?.role, useCart.getState().lines.length), [
+      { text: 'Stay signed in', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  };
 }
 
 export function useSession(): SessionState {

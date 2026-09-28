@@ -17,3 +17,10 @@ apps/mobile/dist/
 apps/mobile/.expo/
 apps/admin/.next/
 apps/admin/next-env.d.ts
+
+# Firebase. Neither file is committed: the build reads google-services.json from an EAS
+# secret file variable (GOOGLE_SERVICES_JSON, see apps/mobile/app.config.js), and the
+# service account key belongs in EAS credentials only -- it can send push as this app.
+google-services.json
+*firebase-adminsdk*.json
+*service-account*.json

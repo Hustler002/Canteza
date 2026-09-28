@@ -1,3 +1,6 @@
+// First, so a crash anywhere below -- including while the rest of this file loads --
+// is already being watched.
+import { Sentry } from '../src/lib/sentry';
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -7,7 +10,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ROLE_HOME, type Role } from '@canteza/shared';
 import { queryClient } from '../src/lib/query';
 import { SessionProvider, useSession } from '../src/lib/session';
-import { registerForPush, routeForPush } from '../src/lib/push';
+import { isNewResponse, registerForPush, routeForPush } from '../src/lib/push';
 import { Loading } from '../src/components/ui';
 import { useTheme } from '../src/theme';
 
@@ -78,9 +81,11 @@ function RouteGuard() {
  * Push, for whoever is signed in: register this device with them, and open the right
  * screen when a notification is tapped -- including the tap that launched the app.
  *
- * Navigation happens in an effect, never during render (rule 18a), and each response is
- * handled once and then cleared. Without the clear, signing out and back in remounts this
- * and replays the last tap, dropping someone onto an order from yesterday.
+ * Navigation happens in an effect, never during render (rule 18a), and each tap is acted
+ * on once per device, ever. The ref catches a re-render; `isNewResponse` catches what the
+ * ref cannot -- Android replays the tap that cold-started the app to every new JavaScript
+ * runtime, so after a reload the same tap arrives again looking brand new, and before this
+ * guard it dropped the student back onto that order (found on the device, 2026-09-28).
  */
 function PushBridge({ userId, role }: { userId: string; role: Role }) {
   const router = useRouter();
@@ -99,13 +104,20 @@ function PushBridge({ userId, role }: { userId: string; role: Role }) {
     Notifications.clearLastNotificationResponse();
 
     const route = routeForPush(response.notification.request.content.data, role);
-    if (route) router.push(route as never);
+    if (!route) return;
+    void isNewResponse(id).then((fresh) => {
+      if (fresh) router.push(route as never);
+    });
   }, [response, role, router]);
 
   return null;
 }
 
-export default function RootLayout() {
+/**
+ * Wrapped so Sentry sees the whole tree: touch breadcrumbs and the root error boundary
+ * come from `Sentry.wrap`, and cost nothing when no DSN is configured.
+ */
+function RootLayout() {
   const t = useTheme();
   return (
     <SafeAreaProvider>
@@ -118,3 +130,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

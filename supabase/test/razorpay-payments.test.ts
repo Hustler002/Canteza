@@ -347,23 +347,39 @@ describe('who hears about a prepaid order, and when', () => {
     return Number(rows[0]!.n);
   }
 
-  it('does not page the counter for an order nobody has paid for', async () => {
+  it('tells nobody an order is placed while nobody has paid for it', async () => {
     const orderId = await prepaidOrder('order_quiet');
     expect(await notificationsFor(orderId, 'canteen')).toBe(0);
-    // The student still hears that it was placed.
-    expect(await notificationsFor(orderId, 'student')).toBe(1);
+    // Not the student either. Found on the device: "Order placed" arrived while the
+    // Razorpay sheet was still open, for an order that might never be paid.
+    expect(await notificationsFor(orderId, 'student')).toBe(0);
   });
 
-  it('pages the counter the moment the money lands, and only once', async () => {
+  it('tells a declined payment’s student nothing either — the order screen says it failed', async () => {
+    const orderId = await prepaidOrder('order_declined');
+    const amount = (await paymentFor(orderId))!.amount_paise;
+    await record('order_declined', 'pay_declined', 'failed', amount, 'Card declined');
+    expect(await notificationsFor(orderId, 'student')).toBe(0);
+    expect(await notificationsFor(orderId, 'canteen')).toBe(0);
+  });
+
+  it('tells both the moment the money lands, and only once', async () => {
     const orderId = await prepaidOrder('order_loud');
     const amount = (await paymentFor(orderId))!.amount_paise;
 
     await record('order_loud', 'pay_loud', 'success', amount);
-    const afterPaid = await notificationsFor(orderId, 'canteen');
-    expect(afterPaid).toBeGreaterThan(0);
+    const counterAfterPaid = await notificationsFor(orderId, 'canteen');
+    expect(counterAfterPaid).toBeGreaterThan(0);
+    expect(await notificationsFor(orderId, 'student')).toBe(1);
 
     await record('order_loud', 'pay_loud', 'success', amount); // Razorpay redelivers
-    expect(await notificationsFor(orderId, 'canteen')).toBe(afterPaid);
+    expect(await notificationsFor(orderId, 'canteen')).toBe(counterAfterPaid);
+    expect(await notificationsFor(orderId, 'student')).toBe(1);
+  });
+
+  it('still tells the student about a cash order the moment it is placed', async () => {
+    const orderId = await freshPrepaidOrder('cod-student', 'cod');
+    expect(await notificationsFor(orderId, 'student')).toBe(1);
   });
 
   it('touches the order, which is what wakes every realtime subscriber', async () => {

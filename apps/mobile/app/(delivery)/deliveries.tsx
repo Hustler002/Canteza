@@ -10,7 +10,7 @@ import {
   useOrdersRealtime,
   useShift,
 } from '../../src/lib/queries';
-import { useIdentity, useSession } from '../../src/lib/session';
+import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
   Badge,
   Body,
@@ -35,7 +35,7 @@ import { useTheme } from '../../src/theme';
 export default function Deliveries() {
   const t = useTheme();
   const identity = useIdentity();
-  const { signOut } = useSession();
+  const confirmSignOut = useConfirmSignOut();
 
   const shift = useShift(identity.userId);
   const online = shift.query.data?.isOnline ?? false;
@@ -53,7 +53,7 @@ export default function Deliveries() {
           title="Waiting for setup"
           body="This account is not linked to a canteen yet. An admin needs to finish onboarding it."
         />
-        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+        <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
       </Screen>
     );
   }
@@ -68,7 +68,7 @@ export default function Deliveries() {
           <Heading level="title">Deliveries</Heading>
           <View style={{ flexDirection: 'row', gap: t.space.sm }}>
             <Button label="Record" variant="secondary" onPress={() => router.push('/history')} />
-            <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+            <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
           </View>
         </View>
 

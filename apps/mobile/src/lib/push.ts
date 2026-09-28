@@ -1,9 +1,11 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken, unregisterPushToken } from '@canteza/api';
 import { PUSH_CHANNEL } from '@canteza/shared';
 import { supabase } from './supabase';
+import { claimResponse, pushAllowed } from './push-route';
 
 /**
  * Push notifications, the device's half.
@@ -58,19 +60,28 @@ export async function registerForPush(): Promise<string | null> {
       });
     }
 
-    let permission = await Notifications.getPermissionsAsync();
-    if (!permission.granted && permission.canAskAgain) {
-      permission = await Notifications.requestPermissionsAsync();
-    }
-    if (!permission.granted) return null;
-
     const id = projectId();
     if (!id) {
       console.warn('[push] no EAS projectId in app config; push disabled');
       return null;
     }
 
+    let permission = await Notifications.getPermissionsAsync();
+    if (!pushAllowed(permission) && permission.canAskAgain) {
+      permission = await Notifications.requestPermissionsAsync();
+    }
+
+    // The token names the device whether or not it may show anything, so it is fetched
+    // either way: allowed, it is registered; refused, it is *removed*. A phone that
+    // registered last week and has since had notifications switched off must stop being
+    // sent to, not keep receiving pushes Android then throws away.
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id });
+    if (!pushAllowed(permission)) {
+      await unregisterPushToken(supabase, token).catch(() => undefined);
+      registeredToken = null;
+      return null;
+    }
+
     await registerPushToken(supabase, token, Platform.OS);
     registeredToken = token;
     return token;
@@ -95,3 +106,8 @@ export async function unregisterForPush(): Promise<void> {
 }
 
 export { routeForPush } from './push-route';
+
+/** Whether this tap is new to this device; see `claimResponse` for why it is on disk. */
+export function isNewResponse(identifier: string): Promise<boolean> {
+  return claimResponse(identifier, AsyncStorage);
+}

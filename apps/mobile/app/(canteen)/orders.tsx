@@ -16,7 +16,7 @@ import {
   useOrdersRealtime,
   useTransitionOrder,
 } from '../../src/lib/queries';
-import { useIdentity, useSession } from '../../src/lib/session';
+import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
   Badge,
   Body,
@@ -70,7 +70,7 @@ export default function CanteenOrders() {
   const t = useTheme();
   const router = useRouter();
   const identity = useIdentity();
-  const { signOut } = useSession();
+  const confirmSignOut = useConfirmSignOut();
   const [tab, setTab] = useState(TABS[0]!);
 
   const canteenId = identity.canteenId ?? '';
@@ -87,7 +87,7 @@ export default function CanteenOrders() {
           title="Waiting for setup"
           body="This account is not linked to a canteen yet. An admin needs to finish onboarding it."
         />
-        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+        <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
       </Screen>
     );
   }
@@ -101,7 +101,7 @@ export default function CanteenOrders() {
           right={
             <View style={{ flexDirection: 'row', gap: t.space.sm }}>
               <IconButton glyph="☰" label="Menu" onPress={() => router.push('/menu')} />
-              <IconButton glyph="⏻" label="Sign out" onPress={() => void signOut()} />
+              <IconButton glyph="⏻" label="Sign out" onPress={confirmSignOut} />
             </View>
           }
         />

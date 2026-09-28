@@ -3,13 +3,15 @@
 // Without this, Metro only watches apps/mobile and only resolves its own
 // node_modules, so `@canteza/shared` (TypeScript source, hoisted to the root)
 // fails to resolve and edits to it do not trigger a reload.
-const { getDefaultConfig } = require('expo/metro-config');
+// Sentry's wrapper around expo/metro-config's getDefaultConfig: it adds a debug id to every
+// bundle and its source map, which is how Sentry matches a release crash to readable code.
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const path = require('node:path');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
-const config = getDefaultConfig(projectRoot);
+const config = getSentryExpoConfig(projectRoot);
 
 config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [

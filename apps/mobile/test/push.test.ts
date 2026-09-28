@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PUSH_CHANNEL } from '@canteza/shared';
-import { routeForPush } from '../src/lib/push-route';
+import { claimResponse, pushAllowed, routeForPush } from '../src/lib/push-route';
 
 describe('routeForPush', () => {
   it('opens the order itself for a student', () => {
@@ -43,5 +44,77 @@ describe('the Android channel', () => {
         Array.isArray(entry) && entry[0] === 'expo-notifications',
     );
     expect(plugin?.[1].defaultChannel).toBe(PUSH_CHANNEL.id);
+  });
+});
+
+describe('where the build finds google-services.json', () => {
+  // app.config.js is CommonJS, read by Expo's own loader; require it the same way.
+  const { googleServicesFile } = createRequire(import.meta.url)('../app.config.js') as {
+    googleServicesFile: (
+      env: Record<string, string>,
+      exists: (p: string) => boolean,
+    ) => string | undefined;
+  };
+
+  it('uses the EAS secret file variable when the build servers set it', () => {
+    expect(googleServicesFile({ GOOGLE_SERVICES_JSON: '/eas/file.json' }, () => true)).toBe(
+      '/eas/file.json',
+    );
+  });
+
+  it('falls back to the local file on a developer machine', () => {
+    expect(googleServicesFile({}, () => true)).toBe('./google-services.json');
+  });
+
+  it('leaves the setting out when there is neither, rather than break the build', () => {
+    expect(googleServicesFile({}, () => false)).toBeUndefined();
+  });
+});
+
+describe('a tapped notification is acted on once per device', () => {
+  const store = () => {
+    const map = new Map<string, string>();
+    return {
+      getItem: async (key: string) => map.get(key) ?? null,
+      setItem: async (key: string, value: string) => void map.set(key, value),
+    };
+  };
+
+  it('opens the first time and never again for the same tap', async () => {
+    const disk = store();
+    expect(await claimResponse('tap-1', disk)).toBe(true);
+    // A reload: new runtime, empty memory, and Android replays the same tap.
+    expect(await claimResponse('tap-1', disk)).toBe(false);
+    expect(await claimResponse('tap-1', disk)).toBe(false);
+  });
+
+  it('still opens a different, newer tap', async () => {
+    const disk = store();
+    await claimResponse('tap-1', disk);
+    expect(await claimResponse('tap-2', disk)).toBe(true);
+  });
+
+  it('opens rather than swallows the tap when storage fails', async () => {
+    const broken = {
+      getItem: async () => {
+        throw new Error('storage unavailable');
+      },
+      setItem: async () => undefined,
+    };
+    expect(await claimResponse('tap-1', broken)).toBe(true);
+  });
+});
+
+describe('pushAllowed', () => {
+  it('trusts status, not granted — notifications switched off in settings', () => {
+    // What Android reports when the runtime permission is still held but the user has
+    // turned the app's notifications off.
+    expect(pushAllowed({ status: 'denied', granted: true })).toBe(false);
+  });
+
+  it('allows only a plain grant', () => {
+    expect(pushAllowed({ status: 'granted', granted: true })).toBe(true);
+    expect(pushAllowed({ status: 'undetermined', granted: false })).toBe(false);
+    expect(pushAllowed({ status: 'denied', granted: false })).toBe(false);
   });
 });

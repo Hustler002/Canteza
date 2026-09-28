@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { isAwaitingOnboarding } from '@canteza/api';
 import { BRAND, formatPaise, PLATFORM_DEFAULTS } from '@canteza/shared';
-import { useIdentity, useSession } from '../lib/session';
+import { useConfirmSignOut, useIdentity } from '../lib/session';
 import { Badge, Body, Button, Card, EmptyState, Heading, Screen } from './ui';
 import { useTheme } from '../theme';
 
@@ -21,7 +21,7 @@ export function RoleHome({
 }) {
   const t = useTheme();
   const identity = useIdentity();
-  const { signOut } = useSession();
+  const confirmSignOut = useConfirmSignOut();
 
   if (isAwaitingOnboarding(identity)) {
     return (
@@ -30,7 +30,7 @@ export function RoleHome({
           title="Waiting for setup"
           body={`Your ${identity.role} account has not been linked to a canteen yet. An admin needs to finish onboarding it.`}
         />
-        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+        <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
       </Screen>
     );
   }
@@ -64,7 +64,7 @@ export function RoleHome({
         </Body>
       </Card>
 
-      <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+      <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
     </Screen>
   );
 }

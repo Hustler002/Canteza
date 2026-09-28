@@ -87,8 +87,8 @@ npx eas-cli init
   small plugin. Flagging it because it is the one dependency here that is not
   Expo-maintained.
 
-Add Sentry in the same pass if you want it in this build (`@sentry/react-native@~7.11.0`);
-it needs a DSN before it does anything, but installing it now avoids a third build.
+Sentry was not added in that pass, so it costs a third build — see "Sentry: the third build"
+below.
 
 ### 4. Build
 
@@ -173,3 +173,63 @@ npx eas-cli build --profile development --platform android
 Then install the new APK over the old one. **Reload once it opens** — rule 18a.
 
 On first launch after signing in, Android 13+ asks for notification permission. Allow it.
+
+## Sentry: the third build
+
+Written and waiting, like push was: `src/lib/sentry.ts` starts it, `src/lib/report.ts`
+decides what is worth an event, and the query client and session are wired to them. **It
+is off until a DSN is configured**, so nothing is sent from any build today.
+
+### What it reports, and what it never sends
+
+- **Crashes**, JavaScript and native, caught by the SDK itself.
+- **Handled errors only when nothing can name them** (`shouldReport`): a failure with a
+  code in `ERROR_CODES` already has a message on screen — "canteen closed", "coupon
+  invalid", "network problem" — and is never sent. Only `UNKNOWN` is, because that is a
+  bug by definition.
+- **About a person: an opaque user id and a role.** Never a name, email, phone or room.
+  `sendDefaultPii: false` stops the SDK adding an IP address. The id is enough to find an
+  account's events and join them to the database.
+- **Performance tracing is off** (`tracesSampleRate: 0`) until there is a reason for it.
+
+### 1. A Sentry project
+
+Free Developer plan: https://sentry.io/signup → create a project, platform **React
+Native**, named e.g. `canteza-mobile`. You need three values, **none of them secret**:
+
+- the **DSN** — Project Settings → Client Keys (DSN). Built to ship inside an app: it
+  can send events and read nothing.
+- the **organization slug** and **project slug** — both are in the project's URL.
+
+Send me those three and I will put the DSN in `eas.json` and `apps/mobile/.env`, and the
+slugs in `app.json`.
+
+### 2. An auth token — for preview and production builds, not the dev build
+
+Source maps are what turn a release crash into readable code, and uploading them needs a
+Sentry auth token. **This one is a secret: never paste it to me or commit it.**
+
+The development profile does not need it: `sentry.gradle` uploads only for non-debug
+builds, and a development build is a debug APK whose code comes from Metro. A **preview or
+production** build does, and **fails without it** — unless the upload is switched off with
+`SENTRY_DISABLE_AUTO_UPLOAD=true`. So before the first release build:
+
+Sentry → Settings → Auth Tokens → create an **organization token**, then from `apps/mobile`:
+
+```bash
+npx eas-cli env:set --name SENTRY_AUTH_TOKEN --type string --visibility secret --environment preview --environment production
+```
+
+It prompts for the value, so it never lands in your shell history.
+
+### 3. Rebuild
+
+`@sentry/react-native` is native, so like push it needs a new development build.
+
+**The order matters: build and install first, then put the DSN in `apps/mobile/.env`.**
+From the SDK's own `wrapper.js`: with no DSN, `initNativeSdk` returns before it looks for
+the native module, so the current APK reloads this code quietly. With a DSN it looks, and
+on an APK built without Sentry it fails — which a development build reports as a "could
+not connect to Sentry native SDK" alert on every reload. The DSN in `eas.json` affects
+only what the build bakes in; a development build's JavaScript comes from Metro, which
+reads `apps/mobile/.env`.

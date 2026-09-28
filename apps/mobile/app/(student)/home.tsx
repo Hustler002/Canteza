@@ -15,7 +15,7 @@ import {
   useOrdersRealtime,
   orderFilters,
 } from '../../src/lib/queries';
-import { useIdentity } from '../../src/lib/session';
+import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import { useCart } from '../../src/store/cart';
 import {
   Badge,
@@ -52,6 +52,7 @@ export default function StudentHome() {
   const hostels = useHostels();
   const [term, setTerm] = useState('');
   const unreadCount = useUnreadNotificationCount(identity.userId).data ?? 0;
+  const confirmSignOut = useConfirmSignOut();
 
   /*
    * Where this order is going, said up front rather than discovered at checkout.
@@ -121,6 +122,7 @@ export default function StudentHome() {
                 label="Your orders"
                 onPress={() => router.push('/my-orders')}
               />
+              <IconButton glyph="⏻" label="Sign out" onPress={confirmSignOut} />
             </View>
           }
         />
