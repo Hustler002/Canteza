@@ -452,9 +452,15 @@ hashed bundles for a year and sets three security headers.
 **Proven in a browser (production build served like Vercel):** loads with no console
 errors; manifest valid and both icons 200; a deep link returns the app; a signed-in page
 opened while signed out goes to sign-in; `checkout.js` loads and defines `Razorpay`.
-**Not proven:** anything after sign-in on the web — the credentials would go to the
-hosted Supabase project, which this session's browser rules do not allow Claude to type —
-so the signed-in screens, the dialogs and the Razorpay sheet in a browser need a person.
+**Proven on the deployed site by a person (2026-09-29), read back from the database:** riya
+signed in on https://canteza-mobile.vercel.app, placed a cash order and cancelled it
+(payment `failed` / "cancelled by student" — so the browser `confirm` dialog works), then
+paid a second order online through Razorpay Standard Checkout, which the webhook
+confirmed (`success`); admin signed in on https://canteza-admin.vercel.app. **Sign-up
+proven too:** a new account created from the web at 06:17:48 UTC was confirmed
+automatically, signed in 0.4 s later by the same tap (`signUp` then `signIn`), and got a
+`student`, active profile with its name — the first account on the project not made by
+`seed-users.mjs`.
 
 ## The mobile design system
 
@@ -681,6 +687,16 @@ Departures from the original brief, all argued in the ADRs:
   from `notifications.ts` so in-app and push cannot drift.
 
 ## Known gaps
+
+- **An account that has ordered cannot be deleted, on purpose.** `orders.student_id`,
+  `orders.delivery_partner_id` and `order_status_history.actor_id` reference `profiles`
+  with no `on delete` rule, so the dashboard's "Delete user" fails with "Database error
+  deleting user" (seen 2026-09-29 on the web test account). Orders are the money record;
+  a deleted student must not take them along. **Suspend instead** (admin → Accounts,
+  `admin_set_profile_active`) — `getIdentity` refuses an inactive profile at sign-in.
+  Test data can be removed by deleting that account's orders first (everything under
+  `orders` cascades), then the user. There is no "delete my account" flow for students
+  yet; when one is needed, it should anonymise the profile rather than delete it.
 
 - **Email addresses are not verified.** "Confirm email" is **off** on the hosted project
   (2026-09-29; `/auth/v1/settings` reports `mailer_autoconfirm: true`), because with it on
