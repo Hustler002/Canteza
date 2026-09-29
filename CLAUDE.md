@@ -889,6 +889,15 @@ pages match rather than inventing a second way:
   file simply never runs. It sat unregistered from Phase 3 until Phase 6 caught it: the
   login redirect never fired and, worse, the session was never refreshed. The build
   output printing `ƒ Proxy (Middleware)` is the check that it is wired up.
+- **Vercel installs `apps/admin` alone, so it gets none of the root's devDependencies.**
+  With the Root Directory set to `apps/admin`, `npm install` runs there and installs that
+  workspace only — reproduced in a fresh clone: no `typescript` or `@types/node`, and
+  `next build` stops with "Please install typescript and @types/node". Both are now the
+  admin's own devDependencies, at the root's ranges so the lockfile reuses the same
+  versions. The tests import `vitest`, root-only too, so `next build` type-checks through
+  `tsconfig.build.json` (no `test/`); `npm run typecheck` still covers the tests with
+  `tsconfig.json`. **Anything `next build` needs must be declared in
+  `apps/admin/package.json`.**
 
 ## Phase 7 screens
 
