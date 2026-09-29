@@ -188,7 +188,7 @@ because the order is forced rather than chosen:
 | In-app inbox | ✅ done        | —                                                                                                                                                                                                                                                            |
 | Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                                                                     |
 | Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                                                                            |
-| Sentry       | 🔶 web proven  | Web: an error from a local production export reached Sentry (200). Live site needs `EXPO_PUBLIC_SENTRY_DSN` (+ `SENTRY_AUTH_TOKEN`) in Vercel. Phone: Sentry build exists, never sent an event                                                               |
+| Sentry       | 🔶 web proven  | **Web live:** the deployed bundle (`7421155`) sent an error to Sentry, answered 200. Source-map upload not yet confirmed from the build log. Phone: Sentry build exists, never sent an event                                                                 |
 | EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); **admin live** at https://canteza-admin.vercel.app (`canteza-admin`). Both build from `main` (`apps/mobile/WEB.md`) |
 | CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                                                                               |
 
@@ -411,8 +411,11 @@ mutation to `reportIfUnexpected`, and the session tags events. Setup steps are i
 installs the browser's global error handlers instead of the native ones (read in
 `integrations/default.js`). **Proven locally:** a production export with the DSN, served
 like Vercel, sent an uncaught error as two envelopes to `ingest.us.sentry.io`, both
-answered **200**. The live site reports only once `EXPO_PUBLIC_SENTRY_DSN` is a Vercel
-Production variable (`apps/mobile/WEB.md`) — it was built without one.
+answered **200**. **Live since `7421155`:** `EXPO_PUBLIC_SENTRY_DSN` and `SENTRY_AUTH_TOKEN` are Vercel
+Production variables, the deployed bundle carries the DSN and a debug id, and its files —
+relayed byte for byte through localhost, since the browser pane blocks remote scripts —
+sent an uncaught error that Sentry answered **200**. A request for the bundle's `.map`
+gets **403** from Vercel.
 
 - **Source maps:** `build:web` exports with `--source-maps`, and
   `scripts/sentry-web-sourcemaps.mjs` uploads them through Sentry's own
@@ -430,8 +433,10 @@ Production variable (`apps/mobile/WEB.md`) — it was built without one.
   not matter for the web upload.
 - **`--clear` on `build:web`**, because a cached Metro transform can hide a changed
   `EXPO_PUBLIC_*` value (above) — a DSN added in Vercel must not silently miss the bundle.
-- **Not proven:** an upload with a real token (that token is never given to Claude), and
-  events from the live site, until the Vercel variables exist.
+- **Not yet confirmed:** that the upload ran with the real token — the Vercel build log
+  should say `[sentry] 2 source maps uploaded.` (that token is never given to Claude,
+  and the Vercel connector cannot read this project). An issue with readable file names
+  in its stack trace is the other proof.
 
 ## The web app
 
