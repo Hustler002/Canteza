@@ -355,5 +355,6 @@ https://canteza-mobile.vercel.app, built from `main` on every push. Web-specific
 are `.web.ts` files beside their phone versions — session storage, dialogs, Razorpay
 Standard Checkout — and push is off on the web. The deployed bundle was run in a browser
 up to the sign-in screen; signed-in flows there still need a person. The admin dashboard
-is not on Vercel yet. The same day CI went green again: it had failed on Node 20 since
+is live too, at https://canteza-admin.vercel.app, once it declared its own `typescript`
+and `@types/node` (Vercel installs the workspace alone). The same day CI went green again: it had failed on Node 20 since
 2026-09-26 because supabase-js 2.116 needs Node 22's WebSocket; the floor is now 22.

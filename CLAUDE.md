@@ -17,8 +17,8 @@ native sheet, confirmed by the deployed webhook, and a declined card recorded wi
 Razorpay's reason. **UPI is not offered, and that is the Razorpay account, not the app**:
 `GET /v1/methods` for the deployed key reports `upi: false`. Push works end to end on the
 phone (foreground, background, cold-start taps, account switching, refusal). The student
-web app is deployed (https://canteza-mobile.vercel.app); the admin deploy and Sentry are
-still to do.
+web app (https://canteza-mobile.vercel.app) and the admin dashboard
+(https://canteza-admin.vercel.app) are deployed from `main`; Sentry is still to do.
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -183,14 +183,14 @@ npm run db:push        # deploy migrations to the linked project
 blocked on things only an account holder can supply, and it is worth knowing which,
 because the order is forced rather than chosen:
 
-| Track        | State          | Blocked on                                                                                                                                                                                                |
-| ------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| In-app inbox | ✅ done        | —                                                                                                                                                                                                         |
-| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                  |
-| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                         |
-| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                                                                                    |
-| EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); admin dashboard not yet created on Vercel (`apps/mobile/WEB.md`) |
-| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                            |
+| Track        | State          | Blocked on                                                                                                                                                                                                                                                   |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| In-app inbox | ✅ done        | —                                                                                                                                                                                                                                                            |
+| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                                                                     |
+| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                                                                            |
+| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                                                                                                                                       |
+| EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); **admin live** at https://canteza-admin.vercel.app (`canteza-admin`). Both build from `main` (`apps/mobile/WEB.md`) |
+| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                                                                               |
 
 **That fork has been taken:** push, Sentry and the Razorpay sheet all needed a
 development build rather than Expo Go, and one now exists (`apps/mobile/EAS.md`). It is
@@ -681,6 +681,15 @@ Departures from the original brief, all argued in the ADRs:
   from `notifications.ts` so in-app and push cannot drift.
 
 ## Known gaps
+
+- **Email addresses are not verified.** "Confirm email" is **off** on the hosted project
+  (2026-09-29; `/auth/v1/settings` reports `mailer_autoconfirm: true`), because with it on
+  no student could ever sign up: there is no custom SMTP, and Supabase's built-in sender
+  delivers **only to members of the project's team**, a few messages an hour (Supabase
+  docs, "Send messages only to pre-authorized addresses"). `sign-up.tsx` handles both
+  settings — with confirmation off, `signUp` then `signIn` lands the student straight in
+  the app. To verify addresses again: add a custom SMTP provider first, then switch
+  "Confirm email" back on. Site URL and redirect URLs are set to the two Vercel addresses.
 
 - **The unpaid-order sweep is scheduled outside the migrations.** `pg_cron` is an
   extension a project enables rather than something a migration should assume, so the
