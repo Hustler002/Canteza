@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatCampusDateTime, toAppError } from '@canteza/shared';
+import { BRAND, formatCampusDateTime, toAppError } from '@canteza/shared';
 import { useCreateTicket, useMyTickets } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
 import {
@@ -15,7 +15,7 @@ import {
   Loading,
   Screen,
 } from '../../src/components/ui';
-import { AppBar } from '../../src/components/patterns';
+import { AppBar, CardTitle, SectionHeader } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -69,11 +69,18 @@ export default function Support() {
 
   return (
     <Screen scroll>
-      <AppBar title="Help" onBack={() => router.back()} />
+      <AppBar title="Help & support" subtitle="We read every report" onBack={() => router.back()} />
 
       <Card>
-        <Heading level="heading">Tell us what happened</Heading>
-        {orderId ? <Body muted>This will be attached to the order you came from.</Body> : null}
+        <CardTitle
+          icon="chatbubbles-outline"
+          title="Tell us what happened"
+          subtitle={
+            orderId
+              ? 'This will be attached to the order you came from.'
+              : `Anything about ${BRAND.name}`
+          }
+        />
         <Field
           label="Subject"
           value={subject}
@@ -90,15 +97,17 @@ export default function Support() {
           hint="An admin reads every one of these."
         />
         <FormError message={error} />
-        {sent ? <Badge label="Sent — an admin will pick it up" tone="success" /> : null}
-        <Button label="Send" loading={create.isPending} onPress={submit} />
+        {sent ? <Badge label="✓ Sent — an admin will pick it up" tone="success" /> : null}
+        <Button icon="send" label="Send report" loading={create.isPending} onPress={submit} />
       </Card>
 
-      <Heading level="title">Your previous reports</Heading>
+      <SectionHeader title="Your previous reports" />
       {tickets.isLoading ? (
         <Loading label="Loading…" />
       ) : (tickets.data ?? []).length === 0 ? (
-        <Body muted>Nothing yet.</Body>
+        <Text style={[t.font.body, { color: t.color.textMuted }]}>
+          Nothing yet — and we hope it stays that way.
+        </Text>
       ) : (
         <View style={{ gap: t.space.md }}>
           {(tickets.data ?? []).map((ticket) => (
@@ -125,10 +134,17 @@ export default function Support() {
               <Body muted>{formatCampusDateTime(ticket.created_at)}</Body>
               {ticket.body ? <Body>{ticket.body}</Body> : null}
               {ticket.resolution ? (
-                <Card>
-                  <Body muted>What we did</Body>
+                <View
+                  style={{
+                    gap: t.space.xs,
+                    padding: t.space.md,
+                    borderRadius: t.radius.md,
+                    backgroundColor: t.color.successSoft,
+                  }}
+                >
+                  <Text style={[t.font.overline, { color: t.color.success }]}>WHAT WE DID</Text>
                   <Body>{ticket.resolution}</Body>
-                </Card>
+                </View>
               ) : null}
             </Card>
           ))}

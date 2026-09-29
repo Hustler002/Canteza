@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { confirm, notify } from '../../../src/lib/dialog';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -28,7 +28,7 @@ import {
   Screen,
 } from '../../../src/components/ui';
 import { OrderLines, StatusPill } from '../../../src/components/order';
-import { AppBar } from '../../../src/components/patterns';
+import { AppBar, CardTitle, Icon } from '../../../src/components/patterns';
 import { useTheme } from '../../../src/theme';
 
 /**
@@ -69,6 +69,7 @@ export default function DeliveryDetail() {
       <Screen>
         <AppBar title="Delivery" onBack={() => router.replace('/deliveries')} />
         <EmptyState
+          emoji="🤷"
           title="Not your delivery"
           body="Another partner may have taken it, or it was cancelled."
         />
@@ -136,8 +137,16 @@ export default function DeliveryDetail() {
             {moves.map((to) => (
               <Button
                 key={to}
+                icon={
+                  to === 'ready'
+                    ? 'return-up-back-outline'
+                    : to === 'delivered'
+                      ? 'checkmark-done'
+                      : 'bag-check-outline'
+                }
                 label={ACTION_LABEL[to] ?? to}
                 variant={to === 'ready' ? 'secondary' : 'primary'}
+                size={to === 'ready' ? 'md' : 'lg'}
                 onPress={() => act(to)}
                 loading={transition.isPending || release.isPending}
               />
@@ -153,27 +162,39 @@ export default function DeliveryDetail() {
         right={<StatusPill status={data.status} />}
       />
 
-      <Card style={{ borderColor: t.color.primary, borderWidth: 1.5 }}>
-        <Body muted>Deliver to</Body>
+      <Card highlight style={{ padding: t.space.xl }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>
+          <Icon name="location" size={16} color={t.color.primary} />
+          <Text style={[t.font.overline, { color: t.color.primary }]}>DELIVER TO</Text>
+        </View>
         <Heading level="display">{data.hostel_label}</Heading>
         <Heading level="title">
           Block {data.block} · Room {data.room}
         </Heading>
         {data.delivery_note ? (
-          <>
-            <Body muted>Note from the student</Body>
+          <View
+            style={{
+              gap: t.space.xxs,
+              padding: t.space.md,
+              borderRadius: t.radius.md,
+              backgroundColor: t.color.surfaceAlt,
+            }}
+          >
+            <Text style={[t.font.overline, { color: t.color.textMuted }]}>
+              NOTE FROM THE STUDENT
+            </Text>
             <Body>“{data.delivery_note}”</Body>
-          </>
+          </View>
         ) : null}
       </Card>
 
       <Card>
-        <Heading level="heading">What you are carrying</Heading>
+        <CardTitle icon="bag-handle-outline" title="What you are carrying" />
         <OrderLines items={data.order_items ?? []} />
       </Card>
 
       <Card>
-        <Heading level="heading">Money</Heading>
+        <CardTitle icon="cash-outline" title="Money" />
         <Badge label={`Collect ${formatPaise(data.total_paise)} in cash`} tone="primary" />
         <Body muted>
           Hand this to your canteen. {BRAND.name} does not take a cut of the food, and your canteen

@@ -1,7 +1,22 @@
 import { useState } from 'react';
-import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { router } from 'expo-router';
-import { estimatedMinutes, formatPaise, toAppError } from '@canteza/shared';
+import {
+  estimatedMinutes,
+  formatPaise,
+  STUDENT_STATUS_LABEL,
+  toAppError,
+  type OrderStatus,
+} from '@canteza/shared';
 import type { Canteen, CanteenStats } from '@canteza/api';
 import {
   useActiveOrder,
@@ -17,19 +32,10 @@ import {
 } from '../../src/lib/queries';
 import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import { useCart } from '../../src/store/cart';
+import { Badge, Button, Card, EmptyState, ErrorState, Screen } from '../../src/components/ui';
 import {
-  Badge,
-  Body,
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Heading,
-  Screen,
-} from '../../src/components/ui';
-import { StatusPill } from '../../src/components/order';
-import {
-  AppBar,
+  Fact,
+  Icon,
   IconButton,
   Price,
   Rating,
@@ -38,7 +44,24 @@ import {
   Thumb,
   VegMark,
 } from '../../src/components/patterns';
-import { useTheme } from '../../src/theme';
+import { FadeIn, webInteractive, type InteractionState } from '../../src/components/motion';
+import { useTheme, type Theme } from '../../src/theme';
+
+/** The browsing column: wider than a reading column, so canteens can sit two abreast. */
+function wideColumn(t: Theme): ViewStyle {
+  return { width: '100%', maxWidth: t.layout.wide, alignSelf: 'center' };
+}
+
+/**
+ * A greeting that knows what time it is on campus. After eleven at night it stops being
+ * polite and says what everyone is thinking.
+ */
+function greeting(firstName: string, hour: number): string {
+  if (hour >= 23 || hour < 4) return `Late-night cravings, ${firstName}?`;
+  if (hour < 12) return `Good morning, ${firstName}`;
+  if (hour < 17) return `Good afternoon, ${firstName}`;
+  return `Good evening, ${firstName}`;
+}
 
 export default function StudentHome() {
   const t = useTheme();
@@ -53,6 +76,9 @@ export default function StudentHome() {
   const [term, setTerm] = useState('');
   const unreadCount = useUnreadNotificationCount(identity.userId).data ?? 0;
   const confirmSignOut = useConfirmSignOut();
+  const { width } = useWindowDimensions();
+  // Two canteens abreast once there is room for two readable cards; one on a phone.
+  const columns = width >= t.layout.gridBreakpoint ? 2 : 1;
 
   /*
    * Where this order is going, said up front rather than discovered at checkout.
@@ -67,6 +93,7 @@ export default function StudentHome() {
     hostelName && profile.default_block && profile.default_room
       ? `${hostelName} · Block ${profile.default_block} · Room ${profile.default_room}`
       : 'Add your room at checkout';
+  const firstName = identity.profile.full_name?.split(' ')[0] || 'there';
 
   // Live status without polling: an event invalidates, the query refetches.
   useOrdersRealtime(orderFilters.forStudent(identity.userId));
@@ -77,7 +104,7 @@ export default function StudentHome() {
   // which reads as fast, where a centred spinner reads as stalled.
   if (canteens.isLoading) {
     return (
-      <Screen>
+      <Screen width="wide">
         <SkeletonList rows={4} />
       </Screen>
     );
@@ -97,35 +124,61 @@ export default function StudentHome() {
   const canteenNameById = new Map(
     (canteens.data ?? []).map((canteen) => [canteen.id, canteen.name ?? 'Canteen']),
   );
+  const openCount = (canteens.data ?? []).filter(
+    (canteen) => canteen.is_open && canteen.is_accepting_orders,
+  ).length;
 
   return (
     <Screen
       padded={false}
+      width="wide"
       footer={
         cartUnits > 0 && cartCanteen ? (
           <Button
-            label={`${cartUnits} item${cartUnits > 1 ? 's' : ''} in cart   View cart →`}
+            icon="bag-handle"
+            label={`${cartUnits} item${cartUnits > 1 ? 's' : ''} added`}
+            trailing="View cart ›"
+            size="lg"
             onPress={() => router.push('/cart')}
           />
         ) : undefined
       }
     >
-      <View style={{ paddingHorizontal: t.space.lg, paddingTop: t.space.sm, gap: t.space.md }}>
-        <AppBar
-          title={`Hi ${identity.profile.full_name?.split(' ')[0] || 'there'}`}
-          subtitle={deliveryLine}
-          right={
-            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-              <NotificationBell count={unreadCount} />
-              <IconButton
-                glyph="☰"
-                label="Your orders"
-                onPress={() => router.push('/my-orders')}
-              />
-              <IconButton glyph="⏻" label="Sign out" onPress={confirmSignOut} />
+      <View
+        style={[
+          wideColumn(t),
+          { paddingHorizontal: t.space.lg, paddingTop: t.space.md, gap: t.space.lg },
+        ]}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+          <View style={{ flex: 1, gap: t.space.xxs }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>
+              <Icon name="location" size={15} color={t.color.primary} />
+              <Text style={[t.font.overline, { color: t.color.primary }]}>DELIVERING TO</Text>
             </View>
-          }
-        />
+            <Text style={[t.font.heading, { color: t.color.text }]} numberOfLines={1}>
+              {deliveryLine}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+            <IconButton
+              icon="notifications-outline"
+              label="Notifications"
+              badge={unreadCount}
+              onPress={() => router.push('/inbox')}
+            />
+            <IconButton
+              icon="receipt-outline"
+              label="Your orders"
+              onPress={() => router.push('/my-orders')}
+            />
+            <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
+          </View>
+        </View>
+
+        <Text style={[t.font.display, { color: t.color.text, fontSize: 26, lineHeight: 32 }]}>
+          {greeting(firstName, new Date().getHours())}
+        </Text>
 
         {/*
          * Search is the first thing under the greeting because a hungry student
@@ -146,55 +199,67 @@ export default function StudentHome() {
         />
       ) : (
         <FlatList
+          // numColumns cannot change on a mounted list, so a resize past the
+          // breakpoint remounts it with the new column count.
+          key={`canteens-${columns}`}
+          numColumns={columns}
           data={canteens.data ?? []}
           keyExtractor={(canteen) => canteen.id ?? ''}
-          contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
+          contentContainerStyle={[
+            wideColumn(t),
+            { padding: t.space.lg, paddingTop: 0, gap: t.space.md },
+          ]}
+          {...(columns > 1 ? { columnWrapperStyle: { gap: t.space.md } } : {})}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <View style={{ gap: t.space.lg, marginBottom: t.space.xs }}>
-              {order ? (
-                <Pressable onPress={() => router.push(`/order/${order.id}`)}>
-                  <Card style={{ borderColor: t.color.primary, borderWidth: 1.5 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Heading level="heading">{order.code}</Heading>
-                      <StatusPill status={order.status} />
-                    </View>
-                    <Body muted>
-                      {order.canteen_name_snapshot} · {formatPaise(order.total_paise)}
-                    </Body>
-                  </Card>
-                </Pressable>
-              ) : null}
+            <View style={{ gap: t.space.xl, marginBottom: t.space.xs }}>
+              {order ? <ActiveOrderBanner order={order} /> : null}
 
               {(favourites.data ?? []).length > 0 ? (
-                <View style={{ gap: t.space.sm }}>
-                  <SectionHeader title="Order again" />
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
-                    {(favourites.data ?? []).map((row) =>
+                <View style={{ gap: t.space.md }}>
+                  <SectionHeader title="Order again" subtitle="Your favourites, one tap away" />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: t.space.md, paddingBottom: t.space.xs }}
+                  >
+                    {(favourites.data ?? []).map((row, index) =>
                       row.menu_items ? (
-                        <Pressable
-                          key={row.menu_item_id}
-                          onPress={() => router.push(`/canteen/${row.menu_items!.canteen_id}`)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${row.menu_items.name}, go to its canteen`}
-                        >
-                          <Badge
-                            label={`${row.menu_items.name} · ${formatPaise(row.menu_items.price_paise)}`}
-                            tone="primary"
+                        <FadeIn key={row.menu_item_id} index={index}>
+                          <FavouriteCard
+                            name={row.menu_items.name}
+                            price={formatPaise(row.menu_items.price_paise)}
+                            canteen={canteenNameById.get(row.menu_items.canteen_id) ?? 'Canteen'}
+                            onPress={() => router.push(`/canteen/${row.menu_items!.canteen_id}`)}
                           />
-                        </Pressable>
+                        </FadeIn>
                       ) : null,
                     )}
-                  </View>
+                  </ScrollView>
                 </View>
               ) : null}
 
-              <SectionHeader title="Canteens" />
+              <SectionHeader
+                title="Campus canteens"
+                subtitle={
+                  openCount > 0
+                    ? `${openCount} open now · delivered to your room`
+                    : 'All closed right now · you can still browse'
+                }
+              />
             </View>
           }
-          renderItem={({ item }) => <CanteenCard canteen={item} stats={statsById.get(item.id)} />}
+          renderItem={({ item, index }) => (
+            <FadeIn index={index} style={columns > 1 ? { flex: 1 } : undefined}>
+              <CanteenCard canteen={item} stats={statsById.get(item.id)} />
+            </FadeIn>
+          )}
           ListEmptyComponent={
-            <EmptyState title="No canteens yet" body="An admin has not added any canteens." />
+            <EmptyState
+              emoji="🏫"
+              title="No canteens yet"
+              body="An admin has not added any canteens."
+            />
           }
           refreshing={canteens.isFetching}
           onRefresh={() => void canteens.refetch()}
@@ -205,86 +270,161 @@ export default function StudentHome() {
 }
 
 /**
- * The bell, with the unread count sitting on it.
- *
- * The count is in the button's own accessibility label rather than announced as a
- * loose number, and the badge itself is hidden — the same treatment the counter's
- * tab badges get. Nothing is shown at zero: a badge reading "0" is a thing to read
- * that says there is nothing to read.
+ * The order in flight, as the loudest thing on the page: a saffron banner with what is
+ * happening now and a way into the tracker. Nothing else on Home matters as much while
+ * food is on its way.
  */
-function NotificationBell({ count }: { count: number }) {
+function ActiveOrderBanner({
+  order,
+}: {
+  order: {
+    id: string;
+    code: string;
+    status: string;
+    canteen_name_snapshot: string | null;
+    total_paise: number;
+  };
+}) {
   const t = useTheme();
+  const label = STUDENT_STATUS_LABEL[order.status as OrderStatus] ?? order.status;
 
   return (
-    <View>
-      <IconButton
-        glyph="◔"
-        label={count > 0 ? `Notifications, ${count} unread` : 'Notifications'}
-        onPress={() => router.push('/inbox')}
-      />
-      {count > 0 ? (
+    <FadeIn>
+      <Pressable
+        onPress={() => router.push(`/order/${order.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`Order ${order.code}, ${label}. Track it`}
+        style={(state) => {
+          const { pressed, hovered } = state as InteractionState;
+          return [
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: t.space.lg,
+              padding: t.space.lg,
+              borderRadius: t.radius.lg,
+              backgroundColor: hovered ? t.color.primaryStrong : t.color.primary,
+              overflow: 'hidden',
+              transform: [{ scale: pressed ? 0.985 : 1 }],
+            },
+            t.elevation.lifted,
+            webInteractive(t.motion.quick),
+          ];
+        }}
+      >
         <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
           style={{
-            position: 'absolute',
-            top: -2,
-            right: -2,
-            minWidth: 18,
-            height: 18,
-            paddingHorizontal: 4,
-            borderRadius: t.radius.pill,
-            backgroundColor: t.color.danger,
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: t.color.onPrimaryVeil,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 2,
-            borderColor: t.color.background,
           }}
         >
+          <Icon name="bicycle" size={24} color={t.color.onPrimary} />
+        </View>
+        <View style={{ flex: 1, gap: t.space.xxs }}>
+          <Text style={[t.font.overline, { color: t.color.onPrimary, opacity: 0.85 }]}>
+            ORDER {order.code}
+          </Text>
+          <Text style={[t.font.title, { color: t.color.onPrimary }]} numberOfLines={2}>
+            {label}
+          </Text>
           <Text
-            style={{
-              color: t.color.onPrimary,
-              fontSize: 10,
-              fontWeight: '700',
-              fontVariant: ['tabular-nums'],
-            }}
+            style={[t.font.caption, { color: t.color.onPrimary, opacity: 0.9 }]}
+            numberOfLines={1}
           >
-            {count > 9 ? '9+' : count}
+            {order.canteen_name_snapshot} · {formatPaise(order.total_paise)}
           </Text>
         </View>
-      ) : null}
-    </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xxs }}>
+          <Text style={[t.font.label, { color: t.color.onPrimary }]}>Track</Text>
+          <Icon name="chevron-forward" size={16} color={t.color.onPrimary} />
+        </View>
+      </Pressable>
+    </FadeIn>
+  );
+}
+
+/** A favourite dish in the "Order again" row: its tile, its name, its price, its canteen. */
+function FavouriteCard({
+  name,
+  price,
+  canteen,
+  onPress,
+}: {
+  name: string;
+  price: string;
+  canteen: string;
+  onPress: () => void;
+}) {
+  const t = useTheme();
+  return (
+    <Card
+      onPress={onPress}
+      accessibilityLabel={`${name}, ${price}, from ${canteen}. Go to its canteen`}
+      padding="md"
+      style={{ width: 168, gap: t.space.sm }}
+    >
+      <Thumb name={name} size={48} fallback="initial" />
+      <View style={{ gap: t.space.xxs }}>
+        <Text style={[t.font.label, { color: t.color.text }]} numberOfLines={1}>
+          {name}
+        </Text>
+        <Text style={[t.font.caption, { color: t.color.textMuted }]} numberOfLines={1}>
+          {canteen}
+        </Text>
+      </View>
+      <Price value={price} />
+    </Card>
   );
 }
 
 /** The search input. Its own component so the clear button and icon stay together. */
 function SearchBar({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
 
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: t.space.sm,
-        borderWidth: 1,
-        borderColor: t.color.border,
-        backgroundColor: t.color.surface,
-        borderRadius: t.radius.md,
-        paddingHorizontal: t.space.lg,
-        minHeight: t.minTouchTarget,
-      }}
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: t.space.sm,
+          borderWidth: 1.5,
+          borderColor: focused ? t.color.primary : t.color.cardBorder,
+          backgroundColor: t.color.surface,
+          borderRadius: t.radius.md,
+          paddingHorizontal: t.space.lg,
+          minHeight: t.minTouchTarget + 4,
+        },
+        t.elevation.card,
+      ]}
     >
-      <Text style={{ fontSize: 16, color: t.color.textMuted }}>⌕</Text>
+      <Icon name="search" size={19} color={focused ? t.color.primary : t.color.textMuted} />
       <TextInput
         value={value}
         onChangeText={onChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder="Search Maggi, samosa, a canteen…"
         placeholderTextColor={t.color.textFaint}
         accessibilityLabel="Search dishes"
         returnKeyType="search"
         autoCorrect={false}
-        style={{ flex: 1, color: t.color.text, fontSize: t.font.body.fontSize }}
+        style={[
+          {
+            flex: 1,
+            alignSelf: 'stretch',
+            color: t.color.text,
+            fontSize: t.font.body.fontSize,
+            ...(t.font.body.fontFamily ? { fontFamily: t.font.body.fontFamily } : {}),
+          },
+          // The ring above is the focus indicator; the browser's would double it.
+          { outlineStyle: 'none' } as object,
+        ]}
       />
       {value.length > 0 ? (
         <Pressable
@@ -293,7 +433,7 @@ function SearchBar({ value, onChange }: { value: string; onChange: (next: string
           accessibilityLabel="Clear search"
           hitSlop={t.hitSlop}
         >
-          <Text style={{ fontSize: 16, color: t.color.textMuted }}>✕</Text>
+          <Icon name="close-circle" size={20} color={t.color.textFaint} />
         </Pressable>
       ) : null}
     </View>
@@ -321,7 +461,7 @@ function DishResults({
 
   if (results.isLoading) {
     return (
-      <View style={{ padding: t.space.lg }}>
+      <View style={[wideColumn(t), { padding: t.space.lg }]}>
         <SkeletonList rows={3} />
       </View>
     );
@@ -332,6 +472,7 @@ function DishResults({
   if (items.length === 0 && canteenMatches.length === 0) {
     return (
       <EmptyState
+        emoji="🔍"
         title={`Nothing called “${term.trim()}”`}
         body="Try a shorter word, or browse the canteens."
       />
@@ -342,7 +483,10 @@ function DishResults({
     <FlatList
       data={items}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
+      contentContainerStyle={[
+        wideColumn(t),
+        { padding: t.space.lg, paddingTop: 0, gap: t.space.md },
+      ]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
@@ -361,24 +505,39 @@ function DishResults({
             ))}
             {items.length > 0 ? <SectionHeader title="Dishes" /> : null}
           </View>
-        ) : null
+        ) : (
+          <View style={{ marginBottom: t.space.xs }}>
+            <SectionHeader
+              title="Dishes"
+              subtitle={`${items.length} match${items.length === 1 ? '' : 'es'} across campus`}
+            />
+          </View>
+        )
       }
-      renderItem={({ item }) => (
-        <Pressable
-          onPress={() => router.push(`/canteen/${item.canteen_id}`)}
-          accessibilityRole="button"
-          accessibilityLabel={`${item.name}, ${canteenNameById.get(item.canteen_id) ?? 'canteen'}`}
-          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-        >
-          <Card style={{ opacity: item.is_available ? 1 : 0.55 }}>
+      renderItem={({ item, index }) => (
+        <FadeIn index={index}>
+          <Card
+            onPress={() => router.push(`/canteen/${item.canteen_id}`)}
+            accessibilityLabel={`${item.name}, ${canteenNameById.get(item.canteen_id) ?? 'canteen'}`}
+            padding="md"
+            style={{ opacity: item.is_available ? 1 : 0.55 }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-              <Thumb name={item.name} uri={item.image_url} size={52} />
-              <View style={{ flex: 1, gap: t.space.xs }}>
+              <Thumb name={item.name} uri={item.image_url} size={52} fallback="initial" />
+              <View style={{ flex: 1, gap: t.space.xxs }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
                   <VegMark veg={item.is_veg} />
-                  <Heading level="heading">{item.name}</Heading>
+                  <Text
+                    style={[t.font.heading, { color: t.color.text, flexShrink: 1 }]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
                 </View>
-                <Body muted>{canteenNameById.get(item.canteen_id) ?? 'Canteen'}</Body>
+                <Fact
+                  icon="storefront-outline"
+                  label={canteenNameById.get(item.canteen_id) ?? 'Canteen'}
+                />
               </View>
               <View style={{ alignItems: 'flex-end', gap: t.space.xs }}>
                 <Price value={formatPaise(item.price_paise)} />
@@ -386,7 +545,7 @@ function DishResults({
               </View>
             </View>
           </Card>
-        </Pressable>
+        </FadeIn>
       )}
     />
   );
@@ -399,56 +558,68 @@ function CanteenCard({ canteen, stats }: { canteen: Canteen; stats?: CanteenStat
   const name = canteen.name ?? 'Canteen';
   // Quoting a delivery time for a shut kitchen would be a promise nobody can keep.
   const eta = open ? estimatedMinutes(stats?.median_prep_minutes, stats?.prep_sample_size) : null;
+  const hours = `${canteen.opens_at?.slice(0, 5) ?? ''}–${canteen.closes_at?.slice(0, 5) ?? ''}`;
 
   return (
-    <Pressable
-      onPress={() => canteen.id && router.push(`/canteen/${canteen.id}`)}
-      disabled={!canteen.id}
-      accessibilityRole="button"
+    /*
+     * A closed canteen stays browsable (§7) but must never be mistaken for an open
+     * one at a glance, so it dims and its status says when it opens -- two signals,
+     * not just the badge, because the badge is the smallest thing on the card.
+     */
+    <Card
+      onPress={canteen.id ? () => router.push(`/canteen/${canteen.id}`) : undefined}
       accessibilityLabel={`${name}, ${open ? 'open' : 'closed'}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      padding="md"
+      style={{ opacity: open ? 1 : 0.6, flex: 1 }}
     >
-      {/*
-       * A closed canteen stays browsable (§7) but must never be mistaken for an open
-       * one at a glance, so it loses the accent border and dims -- two signals, not
-       * just the badge, because the badge is the smallest thing on the card.
-       */}
-      <Card
-        style={{
-          opacity: open ? 1 : 0.55,
-          ...(open ? { borderColor: t.color.primary, borderWidth: 1.5 } : {}),
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-          <Thumb name={name} uri={canteen.image_url} size={52} />
-          <View style={{ flex: 1, gap: t.space.xs }}>
-            <View
-              style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.sm }}
+      <View style={{ flexDirection: 'row', gap: t.space.lg }}>
+        <Thumb name={name} uri={canteen.image_url} size={92} fallback="initial" />
+        <View style={{ flex: 1, gap: t.space.xs, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+            <Text
+              style={[t.font.heading, { color: t.color.text, flex: 1, fontSize: 17 }]}
+              numberOfLines={1}
             >
-              <Heading level="heading">{name}</Heading>
-              <Badge label={open ? 'Open' : 'Closed'} tone={open ? 'success' : 'neutral'} />
-            </View>
-            {canteen.description ? <Body muted>{canteen.description}</Body> : null}
-
-            {/*
-             * Rating and ETA, the two questions asked before tapping (§7). They sit
-             * on their own row above the hours, because "is it good and how long"
-             * decides the tap while the opening hours only explain a closed badge.
-             */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-              <Rating average={stats?.avg_food_rating} count={stats?.review_count} />
-              {eta !== null ? (
-                <Text style={[t.font.label, { color: t.color.text }]}>~{eta} min</Text>
-              ) : null}
-            </View>
-
-            <Body muted>
-              {canteen.opens_at?.slice(0, 5)}–{canteen.closes_at?.slice(0, 5)}
-              {canteen.min_order_paise ? ` · min ${formatPaise(canteen.min_order_paise)}` : ''}
-            </Body>
+              {name}
+            </Text>
+            <Icon name="chevron-forward" size={16} color={t.color.textFaint} />
           </View>
+          {canteen.description ? (
+            <Text style={[t.font.caption, { color: t.color.textMuted }]} numberOfLines={2}>
+              {canteen.description}
+            </Text>
+          ) : null}
+
+          {/*
+           * Rating and ETA, the two questions asked before tapping (§7). They sit
+           * on their own row above the hours, because "is it good and how long"
+           * decides the tap while the opening hours only explain a closed badge.
+           */}
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: t.space.md,
+              marginTop: t.space.xxs,
+            }}
+          >
+            <Rating average={stats?.avg_food_rating} count={stats?.review_count} />
+            {eta !== null ? <Fact icon="time-outline" label={`${eta} min`} strong /> : null}
+            {canteen.min_order_paise ? (
+              <Fact icon="wallet-outline" label={`${formatPaise(canteen.min_order_paise)} min`} />
+            ) : null}
+          </View>
+
+          <Badge
+            dot
+            label={
+              open ? `Open · ${hours}` : `Closed · opens ${canteen.opens_at?.slice(0, 5) ?? ''}`
+            }
+            tone={open ? 'success' : 'neutral'}
+          />
         </View>
-      </Card>
-    </Pressable>
+      </View>
+    </Card>
   );
 }

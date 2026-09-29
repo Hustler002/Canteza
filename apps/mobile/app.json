@@ -25,7 +25,7 @@
       "name": "Canteza",
       "shortName": "Canteza",
       "themeColor": "#E8590C",
-      "backgroundColor": "#FFFDFB",
+      "backgroundColor": "#F6F4F1",
       "description": "From Canteen to Your Room. Order from your campus canteens and track it to your door.",
       "output": "single",
       "bundler": "metro"

@@ -188,7 +188,7 @@ because the order is forced rather than chosen:
 | In-app inbox | ✅ done        | —                                                                                                                                                                                                                                                            |
 | Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                                                                     |
 | Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                                                                            |
-| Sentry       | 🔶 web proven  | **Web live:** the deployed bundle (`7421155`) sent an error to Sentry, answered 200. Source-map upload not yet confirmed from the build log. Phone: Sentry build exists, never sent an event                                                                 |
+| Sentry       | 🔶 web proven  | **Web live:** the deployed bundle (`7421155`) sent an error to Sentry, answered 200. Source maps uploaded by that build (its log: `[sentry] 2 source maps uploaded.`). Phone: Sentry build exists, never sent an event                                       |
 | EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); **admin live** at https://canteza-admin.vercel.app (`canteza-admin`). Both build from `main` (`apps/mobile/WEB.md`) |
 | CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                                                                               |
 
@@ -433,10 +433,12 @@ gets **403** from Vercel.
   not matter for the web upload.
 - **`--clear` on `build:web`**, because a cached Metro transform can hide a changed
   `EXPO_PUBLIC_*` value (above) — a DSN added in Vercel must not silently miss the bundle.
-- **Not yet confirmed:** that the upload ran with the real token — the Vercel build log
-  should say `[sentry] 2 source maps uploaded.` (that token is never given to Claude,
-  and the Vercel connector cannot read this project). An issue with readable file names
-  in its stack trace is the other proof.
+- **The upload ran with the real token** on the `7421155` Vercel build: its log reads
+  `[sentry] 2 source maps uploaded.`, a line the script prints only when Sentry's upload
+  script exited 0, which it does only if `sentry-cli` accepted every map (`execSync`
+  throws otherwise). Read by a person — the token is never given to Claude and the Vercel
+  connector cannot see this project. **Not yet seen:** a stack trace de-minified in the
+  Sentry UI.
 
 ## The web app
 
@@ -495,10 +497,45 @@ automatically, signed in 0.4 s later by the same tap (`signUp` then `signIn`), a
 
 ## The mobile design system
 
-`src/theme.ts` holds the tokens (colour, space, radius, type, **elevation**, motion);
-`src/components/ui.tsx` holds the primitives; `src/components/patterns.tsx` holds the
-compositions — `AppBar`, `IconButton`, `Chip`, `SectionHeader`, `Skeleton`,
-`SkeletonList`, `Price`, `QtyStepper`, `Thumb`, `VegMark`.
+`src/theme.ts` holds the tokens (colour, space, radius, type, **elevation**, motion,
+**layout**); `src/components/ui.tsx` holds the primitives; `src/components/patterns.tsx`
+holds the compositions — `AppBar`, `IconButton`, `Icon`, `Chip`, `SectionHeader`,
+`CardTitle`, `OptionCard`, `CheckRow`, `Fact`, `Divider`, `Skeleton`, `SkeletonList`,
+`Price`, `QtyStepper`, `Thumb`, `VegMark`, `Rating`, `BrandMark`; `motion.tsx` holds
+`FadeIn`, `useReducedMotion` and `webInteractive`; `auth-shell.tsx` frames sign-in/up.
+
+**The 2026-09-29 visual refresh** (presentation only — no query, RPC, auth or payment code
+changed). What it settled, so later screens match rather than drift:
+
+- **Surface on background, not outlines.** White cards on a warm stone page
+  (`background` `#F6F4F1`), lifted by a warm-tinted shadow (`elevation.card`); a card's
+  own border is `cardBorder`, transparent in light mode and a hairline in dark, where a
+  shadow cannot be seen. `Card` takes `onPress` (sinks on press, rises on hover) and
+  `highlight` (a brand outline for the one card about something happening now).
+- **Every page is a centred column on a wide screen** (`layout.content` 720,
+  `layout.wide` 1080). `Screen` applies it to its own content; an unpadded screen that
+  renders its own `FlatList` passes `columnStyle(t)` to the list's
+  `contentContainerStyle` (and its header), so the list still scrolls from anywhere in
+  the window. Home is the one `wide` screen: canteens go two abreast at ≥ 760px.
+- **Icons are Ionicons via `@expo/vector-icons`** (`Icon`, and the `icon` prop on
+  `IconButton`, `Button`, `Chip`, `Fact`, `CardTitle`). JavaScript plus a font file — the
+  phone build already has `expo-font`, so adding it needed no rebuild. The text glyphs it
+  replaced (`◔ ☰ ⏻`) read as unfinished.
+- **The web has its own typeface; the phone does not.** Plus Jakarta Sans loads from
+  Google Fonts in `public/index.html` (`display=swap`) and `theme.ts` sets `fontFamily`
+  only when `Platform.OS === 'web'`. A custom font on the phone means bundling files and
+  holding the splash screen — a rebuild for little gain over Roboto/SF.
+- **Motion is optional.** `FadeIn` staggers the first screenful of a list (never row 40)
+  and `Skeleton` breathes; both run on the native driver on the phone and both stop when
+  the device asks for reduced motion. Presses scale (`0.97`), never delay.
+- **Danger is soft.** A `danger` button is red text on a pale red, not a red slab —
+  reject and cancel must be findable, never the loudest thing on a screen.
+- **Checking signed-in screens without typing a password into a browser:** a Node script
+  signs a demo account in with `SEED_PASSWORD` (as `verify:live` does), serves the
+  session to `localhost` only, and the page writes it to `localStorage` under
+  `sb-<ref>-auth-token`. No token passes through the tool transcript. The browser pane's
+  phone emulation draws stale frames and mis-aims clicks; test at the pane's own width
+  and measure desktop layout with `getBoundingClientRect` instead.
 
 Four decisions worth not re-litigating:
 

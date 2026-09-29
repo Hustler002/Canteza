@@ -1,4 +1,4 @@
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { OrderWithItems } from '@canteza/api';
 import {
@@ -11,16 +11,16 @@ import {
 import { orderFilters, useMyOrders, useOrdersRealtime } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
 import {
-  Body,
   Card,
+  columnStyle,
   EmptyState,
   ErrorState,
-  Heading,
   Loading,
   Screen,
 } from '../../src/components/ui';
 import { StatusPill } from '../../src/components/order';
-import { AppBar, Price } from '../../src/components/patterns';
+import { AppBar, Divider, Icon, Price, Thumb } from '../../src/components/patterns';
+import { FadeIn } from '../../src/components/motion';
 import { ReorderButton } from '../../src/components/reorder';
 import { useTheme } from '../../src/theme';
 
@@ -55,7 +55,7 @@ export default function MyOrders() {
 
   return (
     <Screen padded={false}>
-      <View style={{ paddingHorizontal: t.space.lg, paddingTop: t.space.sm }}>
+      <View style={[columnStyle(t), { paddingHorizontal: t.space.lg, paddingTop: t.space.sm }]}>
         <AppBar
           title="Your orders"
           subtitle="Tap one to see it, or repeat it in a tap"
@@ -65,14 +65,24 @@ export default function MyOrders() {
       <FlatList
         data={orders.data ?? []}
         keyExtractor={(order) => order.id}
-        contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
+        contentContainerStyle={[
+          columnStyle(t),
+          { padding: t.space.lg, paddingTop: 0, gap: t.space.md },
+        ]}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
+            emoji="🧾"
             title="No orders yet"
             body="Once you order something, it shows up here ready to repeat."
+            action={{ label: 'Browse canteens', onPress: () => router.replace('/') }}
           />
         }
-        renderItem={({ item }) => <OrderRow order={item} />}
+        renderItem={({ item, index }) => (
+          <FadeIn index={index}>
+            <OrderRow order={item} />
+          </FadeIn>
+        )}
         refreshing={orders.isFetching}
         onRefresh={() => void orders.refetch()}
       />
@@ -87,9 +97,12 @@ function OrderRow({ order }: { order: OrderWithItems }) {
   // `orders.status` is a plain string in the generated types, the same cast `StatusPill`
   // makes: the database's check constraint is what keeps it inside the union.
   const live = !isTerminal(order.status as OrderStatus);
+  const summary = order.order_items
+    .map((item) => `${item.quantity} × ${item.name_snapshot}`)
+    .join(', ');
 
   return (
-    <Card style={live ? { borderColor: t.color.primary, borderWidth: 1.5 } : {}}>
+    <Card highlight={live}>
       {/*
        * The card opens the order; the reorder button below is its own target. The
        * Pressable wraps only the readable part so the two taps never fight (§12).
@@ -98,30 +111,38 @@ function OrderRow({ order }: { order: OrderWithItems }) {
         onPress={() => router.push(`/order/${order.id}`)}
         accessibilityRole="button"
         accessibilityLabel={`Order ${order.code}, ${formatPaise(order.total_paise)}`}
-        style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, gap: t.space.sm })}
+        style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, gap: t.space.md })}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Heading level="heading">{order.canteen_name_snapshot}</Heading>
-          <StatusPill status={order.status} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+          <Thumb name={order.canteen_name_snapshot ?? 'Canteen'} size={44} fallback="initial" />
+          <View style={{ flex: 1, gap: t.space.xxs }}>
+            <Text style={[t.font.heading, { color: t.color.text }]} numberOfLines={1}>
+              {order.canteen_name_snapshot}
+            </Text>
+            <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+              {order.code} · {formatCampusDateTime(order.created_at)}
+            </Text>
+          </View>
+          <Icon name="chevron-forward" size={16} color={t.color.textFaint} />
         </View>
 
-        <Body muted>
-          {order.code} · {formatCampusDateTime(order.created_at)}
-        </Body>
+        <Divider dashed />
 
         {/*
          * From the order's own snapshot, never the live menu: a dish renamed or
          * repriced since must not rewrite what this receipt says (rule 6).
          */}
-        <Body>
-          {order.order_items.map((item) => `${item.quantity} × ${item.name_snapshot}`).join(', ')}
-        </Body>
+        <Text style={[t.font.body, { color: t.color.text }]} numberOfLines={2}>
+          {summary}
+        </Text>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+          <StatusPill status={order.status} />
+          <View style={{ flex: 1 }} />
+          <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+            {units} {units === 1 ? 'item' : 'items'} ·
+          </Text>
           <Price value={formatPaise(order.total_paise)} />
-          <Body muted>
-            · {units} {units === 1 ? 'item' : 'items'}
-          </Body>
         </View>
       </Pressable>
 

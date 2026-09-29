@@ -57,12 +57,14 @@ export function ReorderButton({
   // On a history row the caption would repeat down the whole list, so the compact
   // form is the button alone; the tracker keeps the explanation.
   if (compact) {
-    return <Button label="Order again" variant="secondary" onPress={reorder} />;
+    return (
+      <Button icon="refresh" label="Order again" variant="secondary" size="sm" onPress={reorder} />
+    );
   }
 
   return (
     <View style={{ gap: t.space.sm }}>
-      <Button label="Order this again" variant="secondary" onPress={reorder} />
+      <Button icon="refresh" label="Order this again" variant="secondary" onPress={reorder} />
       <Body muted>
         {dropped > 0
           ? `${dropped} ${dropped === 1 ? 'dish is' : 'dishes are'} unavailable and will be left out. `

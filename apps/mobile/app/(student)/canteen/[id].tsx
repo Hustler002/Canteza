@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { MenuItem } from '@canteza/api';
@@ -15,23 +15,26 @@ import { useIdentity } from '../../../src/lib/session';
 import { useCart } from '../../../src/store/cart';
 import {
   Badge,
-  Body,
   Button,
   Card,
   EmptyState,
   ErrorState,
-  Heading,
   Loading,
   Screen,
+  useColumn,
 } from '../../../src/components/ui';
 import {
   AppBar,
+  Chip,
+  Fact,
+  Icon,
   Price,
   QtyStepper,
   Rating,
   Thumb,
   VegMark,
 } from '../../../src/components/patterns';
+import { FadeIn } from '../../../src/components/motion';
 import { useTheme } from '../../../src/theme';
 
 export default function CanteenMenu() {
@@ -45,6 +48,8 @@ export default function CanteenMenu() {
   const cartLines = useCart((state) => state.lines);
   const favourites = useFavorites();
   const allStats = useCanteenStats();
+  // A view filter only: the menu, the cart and the prices are untouched by it.
+  const [vegOnly, setVegOnly] = useState(false);
 
   if (canteen.isLoading || menu.isLoading) return <Loading label="Loading menu…" />;
   if (menu.isError) {
@@ -56,7 +61,14 @@ export default function CanteenMenu() {
     );
   }
   if (!canteen.data) {
-    return <EmptyState title="Canteen not found" body="It may have been closed down." />;
+    return (
+      <EmptyState
+        emoji="🏚️"
+        title="Canteen not found"
+        body="It may have been closed down."
+        action={{ label: 'Back to canteens', onPress: () => router.replace('/') }}
+      />
+    );
   }
 
   const stats = (allStats.data ?? []).find((row) => row.canteen_id === canteenId);
@@ -76,50 +88,59 @@ export default function CanteenMenu() {
     0,
   );
 
+  const items = (menu.data ?? []).filter((item) => !vegOnly || item.is_veg);
+  const hasVeg = (menu.data ?? []).some((item) => item.is_veg);
+
   return (
     <Screen
       padded={false}
       footer={
         showCartBar ? (
           <Button
-            label={`${cartUnits} item${cartUnits > 1 ? 's' : ''} · ${formatPaise(subtotalPaise)}   View cart →`}
+            icon="bag-handle"
+            label={`${cartUnits} item${cartUnits > 1 ? 's' : ''} · ${formatPaise(subtotalPaise)}`}
+            trailing="View cart ›"
+            size="lg"
             onPress={() => router.push('/cart')}
           />
         ) : undefined
       }
     >
-      <View style={{ paddingHorizontal: t.space.lg, paddingTop: t.space.sm }}>
-        <AppBar
-          title={canteen.data.name ?? 'Canteen'}
-          subtitle={
-            open
-              ? // The same quote the home card gave, carried through so the number
-                // does not change between choosing a canteen and ordering from it.
-                `~${estimatedMinutes(stats?.median_prep_minutes, stats?.prep_sample_size)} min${
-                  canteen.data.min_order_paise
-                    ? ` · minimum ${formatPaise(canteen.data.min_order_paise)}`
-                    : ''
-                }`
-              : 'Closed — browse only'
-          }
-          onBack={() => router.back()}
-          right={<Rating average={stats?.avg_food_rating} count={stats?.review_count} />}
-        />
-      </View>
-
-      <FlatList
-        data={menu.data ?? []}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
-        ListHeaderComponent={
-          canteen.data.description || !open ? (
-            <View style={{ gap: t.space.sm, marginBottom: t.space.xs }}>
-              {canteen.data.description ? <Body muted>{canteen.data.description}</Body> : null}
-              {!open ? <Badge label="Closed — you can browse but not order" tone="danger" /> : null}
+      <MenuList
+        items={items}
+        header={
+          <View style={{ gap: t.space.lg, marginBottom: t.space.md }}>
+            <AppBar onBack={() => router.back()} />
+            <CanteenHero
+              name={canteen.data.name ?? 'Canteen'}
+              description={canteen.data.description}
+              open={open}
+              // The same quote the home card gave, carried through so the number
+              // does not change between choosing a canteen and ordering from it.
+              eta={
+                open ? estimatedMinutes(stats?.median_prep_minutes, stats?.prep_sample_size) : null
+              }
+              minOrderPaise={canteen.data.min_order_paise}
+              opensAt={canteen.data.opens_at}
+              closesAt={canteen.data.closes_at}
+              rating={<Rating average={stats?.avg_food_rating} count={stats?.review_count} />}
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+              {hasVeg ? (
+                <Chip
+                  icon="leaf"
+                  label="Veg only"
+                  selected={vegOnly}
+                  onPress={() => setVegOnly(!vegOnly)}
+                />
+              ) : null}
+              <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+                {items.length} dish{items.length === 1 ? '' : 'es'}
+              </Text>
             </View>
-          ) : null
+          </View>
         }
-        renderItem={({ item }) => (
+        renderRow={(item) => (
           <MenuRow
             item={item}
             canteenId={canteenId}
@@ -127,12 +148,159 @@ export default function CanteenMenu() {
             favourite={favouriteIds.has(item.id)}
           />
         )}
-        ListEmptyComponent={
-          <EmptyState title="Nothing on the menu" body="This canteen has not added items yet." />
+        empty={
+          vegOnly ? (
+            <EmptyState
+              emoji="🥗"
+              title="No veg dishes here"
+              body="Turn off “Veg only” to see the whole menu."
+              action={{ label: 'Show everything', onPress: () => setVegOnly(false) }}
+            />
+          ) : (
+            <EmptyState
+              emoji="📋"
+              title="Nothing on the menu"
+              body="This canteen has not added items yet."
+            />
+          )
         }
-        showsVerticalScrollIndicator={false}
       />
     </Screen>
+  );
+}
+
+/**
+ * The menu as one continuous card, like a printed menu: rows separated by hairlines
+ * rather than each dish floating in its own box, which at twenty-eight dishes is a
+ * wall of boxes. Its own component so it can read the page column from `Screen`.
+ */
+function MenuList({
+  items,
+  header,
+  renderRow,
+  empty,
+}: {
+  items: MenuItem[];
+  header: ReactElement;
+  renderRow: (item: MenuItem) => ReactElement;
+  empty: ReactElement;
+}) {
+  const t = useTheme();
+  const column = useColumn();
+  const last = items.length - 1;
+
+  return (
+    <FlatList
+      data={items}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={[column, { padding: t.space.lg, paddingTop: t.space.md }]}
+      ListHeaderComponent={header}
+      renderItem={({ item, index }) => (
+        <FadeIn index={index}>
+          <View
+            style={[
+              {
+                backgroundColor: t.color.surface,
+                paddingHorizontal: t.space.lg,
+                paddingVertical: t.space.lg,
+                borderTopLeftRadius: index === 0 ? t.radius.lg : 0,
+                borderTopRightRadius: index === 0 ? t.radius.lg : 0,
+                borderBottomLeftRadius: index === last ? t.radius.lg : 0,
+                borderBottomRightRadius: index === last ? t.radius.lg : 0,
+                borderTopWidth: index === 0 ? 0 : 1,
+                borderTopColor: t.color.border,
+                borderStyle: 'dashed',
+              },
+              index === 0 ? t.elevation.card : null,
+            ]}
+          >
+            {renderRow(item)}
+          </View>
+        </FadeIn>
+      )}
+      ListEmptyComponent={empty}
+      showsVerticalScrollIndicator={false}
+    />
+  );
+}
+
+/** The canteen's own card at the top of its menu: who it is, how good, how long, when. */
+function CanteenHero({
+  name,
+  description,
+  open,
+  eta,
+  minOrderPaise,
+  opensAt,
+  closesAt,
+  rating,
+}: {
+  name: string;
+  description: string | null;
+  open: boolean;
+  eta: number | null;
+  minOrderPaise: number | null;
+  opensAt: string | null;
+  closesAt: string | null;
+  rating: ReactNode;
+}) {
+  const t = useTheme();
+  return (
+    <FadeIn>
+      <Card style={{ padding: t.space.xl, gap: t.space.md }}>
+        <View style={{ flexDirection: 'row', gap: t.space.lg, alignItems: 'center' }}>
+          <Thumb name={name} size={64} fallback="initial" />
+          <View style={{ flex: 1, gap: t.space.xs }}>
+            <Text style={[t.font.title, { color: t.color.text, fontSize: 24, lineHeight: 30 }]}>
+              {name}
+            </Text>
+            {rating}
+          </View>
+        </View>
+        {description ? (
+          <Text style={[t.font.body, { color: t.color.textMuted }]}>{description}</Text>
+        ) : null}
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: t.space.lg,
+            paddingTop: t.space.md,
+            borderTopWidth: 1,
+            borderTopColor: t.color.border,
+            borderStyle: 'dashed',
+          }}
+        >
+          {eta !== null ? (
+            <Fact icon="time-outline" label={`${eta} min to your room`} strong />
+          ) : null}
+          <Fact
+            icon="calendar-clear-outline"
+            label={`${opensAt?.slice(0, 5) ?? ''}–${closesAt?.slice(0, 5) ?? ''}`}
+          />
+          {minOrderPaise ? (
+            <Fact icon="wallet-outline" label={`${formatPaise(minOrderPaise)} minimum`} />
+          ) : null}
+        </View>
+        {!open ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: t.space.sm,
+              padding: t.space.md,
+              borderRadius: t.radius.md,
+              backgroundColor: t.color.warningSoft,
+            }}
+          >
+            <Icon name="moon-outline" size={18} color={t.color.warning} />
+            <Text style={[t.font.label, { color: t.color.warning, flex: 1 }]}>
+              Closed right now — you can browse, but not order.
+            </Text>
+          </View>
+        ) : null}
+      </Card>
+    </FadeIn>
   );
 }
 
@@ -179,75 +347,70 @@ function MenuRow({
   }
 
   return (
-    <Card style={{ opacity: soldOut ? 0.55 : 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.space.md }}>
-        {/*
-         * The photo, only if there is one. `Thumb` renders nothing without a URL and
-         * this row reserves no space for it, so a menu with no images is a clean list
-         * of names rather than a column of empty squares — and the day a counter adds
-         * a photo, it simply appears and the text reflows beside it.
-         */}
-        <Thumb name={item.name} uri={item.image_url} size={64} />
-
-        <View style={{ flex: 1, gap: t.space.xs }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
-            {/* Not an emoji: a red dot and a green dot are the same dot to a
-             * red-green colourblind student, so the mark carries a label too. */}
-            <VegMark veg={item.is_veg} />
-            <Heading level="heading">{item.name}</Heading>
-          </View>
-
-          {item.description ? <Body muted>{item.description}</Body> : null}
-
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: t.space.md,
-              marginTop: t.space.xs,
-            }}
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: t.space.lg,
+        opacity: soldOut ? 0.55 : 1,
+      }}
+    >
+      <View style={{ flex: 1, gap: t.space.xs }}>
+        {/* Not an emoji: a red dot and a green dot are the same dot to a
+         * red-green colourblind student, so the mark carries a label too. */}
+        <VegMark veg={item.is_veg} />
+        <Text style={[t.font.heading, { color: t.color.text }]}>{item.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+          <Price value={formatPaise(item.price_paise)} />
+          {/*
+           * A favourite is per dish, not per canteen: `favorites` is keyed
+           * (student_id, menu_item_id), and what a student wants again is the
+           * biryani rather than the counter that happens to sell it.
+           */}
+          <Pressable
+            onPress={() => toggleFavourite.mutate({ menuItemId: item.id, on: !favourite })}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: favourite }}
+            accessibilityLabel={
+              favourite ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`
+            }
+            hitSlop={t.hitSlop}
+            style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.85 : 1 }] })}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-              <Price value={formatPaise(item.price_paise)} />
-              {/*
-               * A favourite is per dish, not per canteen: `favorites` is keyed
-               * (student_id, menu_item_id), and what a student wants again is the
-               * biryani rather than the counter that happens to sell it.
-               */}
-              <Pressable
-                onPress={() => toggleFavourite.mutate({ menuItemId: item.id, on: !favourite })}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: favourite }}
-                accessibilityLabel={
-                  favourite
-                    ? `Remove ${item.name} from favourites`
-                    : `Add ${item.name} to favourites`
-                }
-                hitSlop={t.hitSlop}
-              >
-                <Text
-                  style={{ fontSize: 18, color: favourite ? t.color.danger : t.color.textMuted }}
-                >
-                  {favourite ? '♥' : '♡'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {soldOut ? (
-              <Badge label="Sold out" tone="neutral" />
-            ) : (
-              <QtyStepper
-                quantity={quantity}
-                onAdd={quantity === 0 ? onAdd : () => setQuantity(item.id, quantity + 1)}
-                onRemove={() => setQuantity(item.id, quantity - 1)}
-                disabled={!canOrder || busy}
-                accessibilityName={item.name}
-              />
-            )}
-          </View>
+            <Icon
+              name={favourite ? 'heart' : 'heart-outline'}
+              size={20}
+              color={favourite ? t.color.danger : t.color.textMuted}
+            />
+          </Pressable>
         </View>
+        {item.description ? (
+          <Text style={[t.font.caption, { color: t.color.textMuted }]} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
       </View>
-    </Card>
+
+      {/*
+       * The photo, only if there is one. `Thumb` renders nothing without a URL and
+       * this row reserves no space for it, so a menu with no images is a clean list
+       * of names rather than a column of empty squares — and the day a counter adds
+       * a photo, it simply appears with the button tucked under it.
+       */}
+      <View style={{ alignItems: 'center', gap: t.space.sm }}>
+        <Thumb name={item.name} uri={item.image_url} size={96} />
+        {soldOut ? (
+          <Badge label="Sold out" tone="neutral" />
+        ) : (
+          <QtyStepper
+            quantity={quantity}
+            onAdd={quantity === 0 ? onAdd : () => setQuantity(item.id, quantity + 1)}
+            onRemove={() => setQuantity(item.id, quantity - 1)}
+            disabled={!canOrder || busy}
+            accessibilityName={item.name}
+          />
+        )}
+      </View>
+    </View>
   );
 }

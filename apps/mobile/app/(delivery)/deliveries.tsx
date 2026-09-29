@@ -1,4 +1,4 @@
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import { formatPaise, toAppError } from '@canteza/shared';
@@ -13,17 +13,17 @@ import {
 import { notify } from '../../src/lib/dialog';
 import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
-  Badge,
-  Body,
   Button,
   Card,
+  columnStyle,
   EmptyState,
   ErrorState,
-  Heading,
   Loading,
   Screen,
 } from '../../src/components/ui';
 import { StatusPill } from '../../src/components/order';
+import { AppBar, Fact, Icon, IconButton, SectionHeader } from '../../src/components/patterns';
+import { FadeIn, webInteractive } from '../../src/components/motion';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -51,6 +51,7 @@ export default function Deliveries() {
     return (
       <Screen>
         <EmptyState
+          emoji="🛠️"
           title="Waiting for setup"
           body="This account is not linked to a canteen yet. An admin needs to finish onboarding it."
         />
@@ -64,14 +65,21 @@ export default function Deliveries() {
 
   return (
     <Screen padded={false}>
-      <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Heading level="title">Deliveries</Heading>
-          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-            <Button label="Record" variant="secondary" onPress={() => router.push('/history')} />
-            <Button label="Sign out" variant="secondary" onPress={confirmSignOut} />
-          </View>
-        </View>
+      <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.md }]}>
+        <AppBar
+          title="Deliveries"
+          subtitle={identity.profile.full_name ?? undefined}
+          right={
+            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+              <IconButton
+                icon="stats-chart-outline"
+                label="Your record"
+                onPress={() => router.push('/history')}
+              />
+              <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
+            </View>
+          }
+        />
 
         <ShiftSwitch
           online={online}
@@ -99,21 +107,28 @@ export default function Deliveries() {
         <FlatList
           data={[...carrying, ...waiting]}
           keyExtractor={(order) => order.id}
-          contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
-          renderItem={({ item }) => <DeliveryCard order={item} />}
+          contentContainerStyle={[columnStyle(t), { padding: t.space.lg, gap: t.space.md }]}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <FadeIn index={index}>
+              <DeliveryCard order={item} />
+            </FadeIn>
+          )}
           ListHeaderComponent={
             carrying.length > 0 ? (
-              <Heading level="heading">Carrying now ({carrying.length})</Heading>
+              <SectionHeader title={`Carrying now (${carrying.length})`} />
             ) : null
           }
           ListEmptyComponent={
             online ? (
               <EmptyState
+                emoji="🛵"
                 title="Nothing waiting"
                 body="Orders appear the moment your canteen marks one ready."
               />
             ) : (
               <EmptyState
+                emoji="😴"
                 title="You are off shift"
                 body="Go online to see orders waiting at your canteen."
               />
@@ -149,30 +164,55 @@ function ShiftSwitch({
       accessibilityRole="switch"
       accessibilityState={{ checked: online, disabled: busy }}
       accessibilityLabel={online ? 'Go off shift' : 'Go on shift'}
-      style={({ pressed }) => ({
-        minHeight: t.minTouchTarget,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: t.space.md,
-        paddingHorizontal: t.space.lg,
-        paddingVertical: t.space.md,
-        borderRadius: t.radius.lg,
-        backgroundColor: online ? t.color.successSoft : t.color.surfaceAlt,
-        opacity: pressed || busy ? 0.75 : 1,
-      })}
+      style={({ pressed }) => [
+        {
+          minHeight: t.minTouchTarget,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: t.space.md,
+          paddingHorizontal: t.space.lg,
+          paddingVertical: t.space.md,
+          borderRadius: t.radius.lg,
+          borderWidth: 1.5,
+          borderColor: online ? t.color.success : t.color.cardBorder,
+          backgroundColor: online ? t.color.successSoft : t.color.surface,
+          opacity: busy ? 0.7 : 1,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
+        },
+        t.elevation.card,
+        webInteractive(t.motion.quick),
+      ]}
     >
-      <View style={{ flex: 1 }}>
-        <Body>{online ? 'On shift' : 'Off shift'}</Body>
-        <Body muted>
+      <View style={{ flex: 1, gap: t.space.xxs }}>
+        <Text style={[t.font.heading, { color: t.color.text }]}>
+          {online ? 'You are on shift' : 'You are off shift'}
+        </Text>
+        <Text style={[t.font.caption, { color: t.color.textMuted }]}>
           {online
             ? 'You can see and take orders.'
             : carrying > 0
               ? 'You can still finish what you are carrying.'
               : 'Tap to start taking orders.'}
-        </Body>
+        </Text>
       </View>
-      <Badge label={online ? 'ONLINE' : 'OFFLINE'} tone={online ? 'success' : 'neutral'} />
+      {/* A drawn switch: the whole row is the control, this shows its state. */}
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 15,
+          padding: 3,
+          backgroundColor: online ? t.color.success : t.color.border,
+          alignItems: online ? 'flex-end' : 'flex-start',
+        }}
+      >
+        <View
+          style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: t.color.onPrimary }}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -197,30 +237,51 @@ function DeliveryCard({ order }: { order: OrderWithItems }) {
       disabled={unclaimed}
       style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
-      <Card style={unclaimed ? {} : { borderColor: t.color.primary }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Heading level="title">{order.code}</Heading>
+      <Card highlight={!unclaimed}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+          <View style={{ flex: 1, gap: t.space.xxs }}>
+            <Text style={[t.font.title, { color: t.color.text }]}>{order.code}</Text>
+            <Fact icon="storefront-outline" label={order.canteen_name_snapshot ?? 'Canteen'} />
+          </View>
           <StatusPill status={order.status} />
         </View>
 
-        <Body muted>{order.canteen_name_snapshot}</Body>
-
-        <Heading level="heading">
-          {order.hostel_label} · {order.block}-{order.room}
-        </Heading>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: t.space.sm,
+            padding: t.space.md,
+            borderRadius: t.radius.md,
+            backgroundColor: t.color.primarySoft,
+          }}
+        >
+          <Icon name="location" size={18} color={t.color.primary} />
+          <Text style={[t.font.heading, { color: t.color.text, flex: 1 }]}>
+            {order.hostel_label} · {order.block}-{order.room}
+          </Text>
+        </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-          <Body muted>
-            {itemCount} item{itemCount === 1 ? '' : 's'}
-          </Body>
-          <Body muted>Collect {formatPaise(order.total_paise)} cash</Body>
+          <Fact icon="fast-food-outline" label={`${itemCount} item${itemCount === 1 ? '' : 's'}`} />
+          <Fact
+            icon="cash-outline"
+            label={`Collect ${formatPaise(order.total_paise)} cash`}
+            strong
+          />
         </View>
 
         {unclaimed ? (
-          <Button label="Take this delivery" onPress={onClaim} loading={claim.isPending} />
+          <Button
+            icon="hand-left-outline"
+            label="Take this delivery"
+            onPress={onClaim}
+            loading={claim.isPending}
+          />
         ) : (
           <Button
-            label="Open"
+            icon="navigate-outline"
+            label="Open delivery"
             variant="secondary"
             onPress={() => router.push(`/delivery/${order.id}`)}
           />

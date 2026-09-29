@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { signIn, signUp, validatePassword } from '@canteza/api';
 import { toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
-import { Body, Button, Field, FormError, Heading, Screen } from '../../src/components/ui';
+import { AuthShell } from '../../src/components/auth-shell';
+import { Button, Field, FormError } from '../../src/components/ui';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -43,45 +44,53 @@ export default function SignUp() {
   }
 
   return (
-    <Screen scroll>
-      <View style={{ gap: t.space.xs, marginTop: t.space.xxl }}>
-        <Heading level="display">Create account</Heading>
-        <Body muted>Order from campus canteens, delivered to your room.</Body>
-      </View>
-
-      <View style={{ gap: t.space.lg, marginTop: t.space.xl }}>
-        <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
-        <Field
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="you@campus.edu"
-        />
-        <Field
-          label="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          autoComplete="new-password"
-          error={passwordProblem?.userMessage}
-        />
-        <FormError message={error} />
-        <Button
-          label="Create account"
-          onPress={submit}
-          loading={busy}
-          disabled={fullName.trim().length === 0 || email.length === 0 || passwordProblem !== null}
-        />
-        <Button
-          label="I already have an account"
-          variant="secondary"
-          onPress={() => router.replace('/sign-in')}
-        />
-      </View>
-    </Screen>
+    <AuthShell
+      title="Create your account"
+      subtitle="Order from every campus canteen, delivered to your room."
+      footer={
+        <View style={{ alignItems: 'center', gap: t.space.sm }}>
+          <Text style={[t.font.body, { color: t.color.textMuted }]}>Already ordering?</Text>
+          <Button
+            label="I already have an account"
+            variant="secondary"
+            onPress={() => router.replace('/sign-in')}
+          />
+        </View>
+      }
+    >
+      <Field
+        label="Full name"
+        value={fullName}
+        onChangeText={setFullName}
+        autoComplete="name"
+        placeholder="Riya Sharma"
+      />
+      <Field
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        placeholder="you@campus.edu"
+      />
+      <Field
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoCapitalize="none"
+        autoComplete="new-password"
+        error={passwordProblem?.userMessage}
+      />
+      <FormError message={error} />
+      <Button
+        label="Create account"
+        size="lg"
+        onPress={submit}
+        loading={busy}
+        disabled={fullName.trim().length === 0 || email.length === 0 || passwordProblem !== null}
+      />
+    </AuthShell>
   );
 }

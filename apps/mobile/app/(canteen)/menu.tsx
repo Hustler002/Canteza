@@ -17,8 +17,9 @@ import {
   Heading,
   Loading,
   Screen,
+  columnStyle,
 } from '../../src/components/ui';
-import { Thumb } from '../../src/components/patterns';
+import { AppBar, CardTitle, Icon, IconButton, Thumb } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -49,6 +50,7 @@ export default function CanteenMenu() {
     return (
       <Screen>
         <EmptyState
+          emoji="🛠️"
           title="Waiting for setup"
           body="This account is not linked to a canteen yet. An admin needs to finish onboarding it."
         />
@@ -61,20 +63,20 @@ export default function CanteenMenu() {
 
   return (
     <Screen padded={false}>
-      <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.sm }}>
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Heading level="display">Menu</Heading>
-          <Button label="Orders" variant="secondary" onPress={() => router.push('/orders')} />
-        </View>
+      <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.sm }]}>
+        <AppBar
+          title="Menu"
+          subtitle={`${live.length} ${live.length === 1 ? 'dish' : 'dishes'} on sale`}
+          right={
+            <IconButton
+              icon="receipt-outline"
+              label="Orders"
+              onPress={() => router.push('/orders')}
+            />
+          }
+        />
         <Body muted>
-          {live.length} {live.length === 1 ? 'dish' : 'dishes'} on sale. Sold out hides a dish for
-          today; removing it takes it off the menu for good.
+          Sold out hides a dish for today; taking it off the menu removes it for good.
         </Body>
       </View>
 
@@ -89,9 +91,11 @@ export default function CanteenMenu() {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
+          contentContainerStyle={[columnStyle(t), { padding: t.space.lg, gap: t.space.md }]}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
+              emoji="📋"
               title="Nothing on the menu"
               body="Students can find this canteen but cannot order from it until it has a dish."
             />
@@ -163,6 +167,7 @@ function MenuRow({ item }: { item: MenuItem }) {
           <Heading level="heading">{item.name}</Heading>
           <Body muted>{formatPaise(item.price_paise)}</Body>
         </View>
+        <Icon name={open ? 'chevron-up' : 'create-outline'} size={18} color={t.color.textMuted} />
         {!item.is_active ? (
           <Badge label="off the menu" tone="danger" />
         ) : item.is_available ? null : (
@@ -172,6 +177,7 @@ function MenuRow({ item }: { item: MenuItem }) {
 
       {item.is_active ? (
         <Button
+          icon={item.is_available ? 'remove-circle-outline' : 'checkmark-circle-outline'}
           label={item.is_available ? 'Mark sold out' : 'Back in stock'}
           variant={item.is_available ? 'secondary' : 'primary'}
           loading={update.isPending}
@@ -275,11 +281,15 @@ function NewItemCard({ canteenId }: { canteenId: string }) {
 
   return (
     <Card style={{ marginTop: t.space.md }}>
-      <Heading level="heading">Add a dish</Heading>
+      <CardTitle
+        icon="add-circle-outline"
+        title="Add a dish"
+        subtitle="A name and a price is all it takes"
+      />
       <Field label="Name" value={name} onChangeText={setName} maxLength={80} />
       <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="number-pad" />
       <FormError message={error} />
-      <Button label="Add to the menu" loading={create.isPending} onPress={add} />
+      <Button icon="add" label="Add to the menu" loading={create.isPending} onPress={add} />
     </Card>
   );
 }

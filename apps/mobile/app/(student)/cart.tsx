@@ -14,17 +14,26 @@ import { useCanteen, useMenu } from '../../src/lib/queries';
 import { useCart } from '../../src/store/cart';
 import {
   Badge,
-  Body,
   Button,
   Card,
   EmptyState,
   ErrorState,
   FormError,
   Loading,
+  Overline,
   Screen,
 } from '../../src/components/ui';
 import { MoneyRow } from '../../src/components/order';
-import { AppBar, Price, QtyStepper, Thumb } from '../../src/components/patterns';
+import {
+  AppBar,
+  CardTitle,
+  Divider,
+  Icon,
+  Price,
+  QtyStepper,
+  Thumb,
+  VegMark,
+} from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -47,7 +56,12 @@ export default function CartScreen() {
     return (
       <Screen>
         <AppBar title="Your cart" onBack={() => router.back()} />
-        <EmptyState title="Your cart is waiting" body="Pick a canteen and add something to it." />
+        <EmptyState
+          emoji="🛒"
+          title="Your cart is waiting"
+          body="Pick a canteen and add something to it."
+          action={{ label: 'Browse canteens', onPress: () => router.replace('/') }}
+        />
       </Screen>
     );
   }
@@ -114,7 +128,9 @@ export default function CartScreen() {
            * the decision rather than needing a scroll back up to check (§10).
            */}
           <Button
-            label={`Checkout · ${formatPaise(totals.totalPaise)}`}
+            label="Proceed to checkout"
+            trailing={`${formatPaise(totals.totalPaise)} ›`}
+            size="lg"
             onPress={() => router.push('/checkout')}
             disabled={blocker !== null}
           />
@@ -131,13 +147,21 @@ export default function CartScreen() {
             accessibilityRole="button"
             accessibilityLabel="Clear cart"
             hitSlop={t.hitSlop}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}
           >
+            <Icon name="trash-outline" size={16} color={t.color.danger} />
             <Text style={[t.font.label, { color: t.color.danger }]}>Clear</Text>
           </Pressable>
         }
       />
 
       <Card>
+        <CardTitle
+          icon="storefront-outline"
+          title={canteen.data?.name ?? 'Your items'}
+          subtitle={itemCountLabel(lines.reduce((sum, line) => sum + line.quantity, 0))}
+        />
+        <Divider dashed />
         {resolved.map(({ line, item }, index) => (
           <View
             key={line.itemId}
@@ -155,44 +179,78 @@ export default function CartScreen() {
             {item ? <Thumb name={item.name} uri={item.image_url} size={48} /> : null}
 
             <View style={{ flex: 1, gap: t.space.xs }}>
-              <Body>{item ? item.name : 'No longer on the menu'}</Body>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+                {item ? <VegMark veg={item.is_veg} /> : null}
+                <Text style={[t.font.bodyStrong, { color: t.color.text, flexShrink: 1 }]}>
+                  {item ? item.name : 'No longer on the menu'}
+                </Text>
+              </View>
               {item && !item.is_available ? (
                 <Badge label="Sold out" tone="danger" />
               ) : item ? (
                 <Price value={formatPaise(item.price_paise)} tone="muted" />
               ) : (
-                <Body muted>Remove it to continue</Body>
+                <Text style={[t.font.caption, { color: t.color.danger }]}>
+                  Remove it to continue
+                </Text>
               )}
             </View>
 
             <View style={{ alignItems: 'flex-end', gap: t.space.sm }}>
-              {item ? <Price value={formatPaise(item.price_paise * line.quantity)} /> : null}
               <QtyStepper
                 quantity={line.quantity}
                 onAdd={() => setQuantity(line.itemId, line.quantity + 1)}
                 onRemove={() => setQuantity(line.itemId, line.quantity - 1)}
                 accessibilityName={item ? item.name : 'this item'}
               />
+              {item ? <Price value={formatPaise(item.price_paise * line.quantity)} /> : null}
             </View>
           </View>
         ))}
+        <Divider dashed />
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}
+        >
+          <Icon name="add-circle-outline" size={18} color={t.color.primary} />
+          <Text style={[t.font.label, { color: t.color.primary }]}>Add more items</Text>
+        </Pressable>
       </Card>
 
       <Card>
-        <MoneyRow label="Subtotal" amountPaise={totals.subtotalPaise} />
-        <MoneyRow label="Delivery" amountPaise={totals.deliveryFeePaise} />
-        <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
-        {/*
-         * No surprise fees (§9). The platform fee is NOT a line here because it is
-         * not an extra charge -- it is the slice of the delivery fee above that
-         * Canteza keeps, so listing it would double-count it on the student's bill.
-         */}
-        <Body muted>
+        <Overline>Bill details</Overline>
+        <MoneyRow label="Item total" amountPaise={totals.subtotalPaise} />
+        <MoneyRow label="Delivery to your room" amountPaise={totals.deliveryFeePaise} />
+        <Divider dashed />
+        <MoneyRow label="To pay" amountPaise={totals.totalPaise} strong />
+      </Card>
+
+      {/*
+       * No surprise fees (§9). The platform fee is NOT a line here because it is
+       * not an extra charge -- it is the slice of the delivery fee above that
+       * Canteza keeps, so listing it would double-count it on the student's bill.
+       */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: t.space.sm,
+          padding: t.space.md,
+          borderRadius: t.radius.md,
+          backgroundColor: t.color.successSoft,
+        }}
+      >
+        <Icon name="shield-checkmark-outline" size={18} color={t.color.success} />
+        <Text style={[t.font.caption, { color: t.color.text, flex: 1 }]}>
           Nothing else is added at checkout. The canteen keeps every rupee of the food;{' '}
           {formatPaise(PLATFORM_DEFAULTS.platformFeePaise)} of the delivery fee keeps {BRAND.name}{' '}
           running.
-        </Body>
-      </Card>
+        </Text>
+      </View>
     </Screen>
   );
+}
+
+function itemCountLabel(units: number): string {
+  return `${units} item${units === 1 ? '' : 's'}`;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { readDefaultAddress } from '@canteza/api';
@@ -25,17 +25,24 @@ import { isOnlinePaymentAvailable } from '../../src/lib/razorpay';
 import { useCart } from '../../src/store/cart';
 import {
   Badge,
-  Body,
   Button,
   Card,
   Field,
   FormError,
-  Heading,
   Loading,
+  Overline,
   Screen,
 } from '../../src/components/ui';
 import { MoneyRow } from '../../src/components/order';
-import { AppBar, Chip } from '../../src/components/patterns';
+import {
+  AppBar,
+  CardTitle,
+  CheckRow,
+  Chip,
+  Divider,
+  Icon,
+  OptionCard,
+} from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
 
 export default function Checkout() {
@@ -189,12 +196,20 @@ export default function Checkout() {
       footer={
         <>
           <FormError message={error} />
-          {!addressComplete ? <Body muted>Pick a hostel, block and room to continue.</Body> : null}
+          {!addressComplete ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>
+              <Icon name="information-circle-outline" size={16} color={t.color.textMuted} />
+              <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+                Pick a hostel, block and room to continue.
+              </Text>
+            </View>
+          ) : null}
           {/*
            * The total rides on the button and the button is always on screen, so it
            * stays visible however far down the form the student has scrolled (§10).
            */}
           <Button
+            icon={method === 'razorpay' ? 'lock-closed' : 'checkmark-circle'}
             label={
               method !== 'razorpay'
                 ? `Place order · ${formatPaise(totals.totalPaise)}`
@@ -205,6 +220,7 @@ export default function Checkout() {
                     'Continue to payment'
                   : `Pay ${formatPaise(totals.totalPaise)}`
             }
+            size="lg"
             onPress={submit}
             // Both steps, so the button stays busy from the tap until the sheet is up
             // and a second tap cannot land in the gap between them.
@@ -221,13 +237,18 @@ export default function Checkout() {
       />
 
       <Card>
-        <Heading level="heading">Deliver to</Heading>
+        <CardTitle
+          icon="location-outline"
+          title="Deliver to"
+          subtitle="Your hostel, block and room"
+        />
 
-        <Body muted>Hostel</Body>
+        <Overline>Hostel</Overline>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
           {(hostels.data ?? []).map((h) => (
             <Chip
               key={h.id}
+              icon="business-outline"
               label={h.name}
               selected={h.id === hostelId}
               onPress={() => {
@@ -240,7 +261,7 @@ export default function Checkout() {
 
         {blocks.length > 0 ? (
           <>
-            <Body muted>Block</Body>
+            <Overline>Block</Overline>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
               {blocks.map((b) => (
                 <Chip key={b} label={b} selected={b === block} onPress={() => setBlock(b)} />
@@ -263,21 +284,15 @@ export default function Checkout() {
           placeholder="Less spicy, call when you reach"
         />
 
-        <Pressable
-          onPress={() => setSaveAsDefault(!saveAsDefault)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: saveAsDefault }}
-          hitSlop={t.hitSlop}
-        >
-          <Badge
-            label={saveAsDefault ? '✓ Remember this address' : 'Remember this address'}
-            tone={saveAsDefault ? 'primary' : 'neutral'}
-          />
-        </Pressable>
+        <CheckRow
+          label="Remember this address"
+          checked={saveAsDefault}
+          onToggle={() => setSaveAsDefault(!saveAsDefault)}
+        />
       </Card>
 
       <Card>
-        <Heading level="heading">Coupon</Heading>
+        <CardTitle icon="pricetag-outline" title="Offers" subtitle="Apply a coupon code" />
         <Field
           label="Code (optional)"
           value={coupon}
@@ -298,6 +313,7 @@ export default function Checkout() {
             {(coupons.data ?? []).map((available) => (
               <Chip
                 key={available.id}
+                icon="ticket-outline"
                 label={
                   available.min_order_paise > 0
                     ? `${available.code} · over ${formatPaise(available.min_order_paise)}`
@@ -312,19 +328,20 @@ export default function Checkout() {
       </Card>
 
       <Card>
-        <Heading level="heading">Payment</Heading>
-        <MoneyRow label="Subtotal" amountPaise={totals.subtotalPaise} />
-        <MoneyRow label="Delivery" amountPaise={totals.deliveryFeePaise} />
-        <MoneyRow label="Total" amountPaise={totals.totalPaise} strong />
+        <CardTitle icon="wallet-outline" title="Payment" subtitle="How would you like to pay?" />
         {onlineAvailable ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
-            <Chip
-              label="Pay online · UPI, cards"
+          <View style={{ gap: t.space.sm }}>
+            <OptionCard
+              icon="card-outline"
+              title="Pay online"
+              subtitle="Cards, wallets, netbanking and UPI where available"
               selected={method === 'razorpay'}
               onPress={() => setMethod('razorpay')}
             />
-            <Chip
-              label="Cash on delivery"
+            <OptionCard
+              icon="cash-outline"
+              title="Cash on delivery"
+              subtitle="Pay when it reaches your room"
               selected={method === 'cod'}
               onPress={() => setMethod('cod')}
             />
@@ -333,11 +350,19 @@ export default function Checkout() {
           <Badge label="Pay cash on delivery" tone="info" />
         )}
         {method === 'razorpay' ? (
-          <Body muted>
+          <Text style={[t.font.caption, { color: t.color.textMuted }]}>
             The canteen sees your order as soon as the payment is confirmed. If a coupon applies,
             the payment screen shows the discounted total.
-          </Body>
+          </Text>
         ) : null}
+      </Card>
+
+      <Card>
+        <Overline>Bill details</Overline>
+        <MoneyRow label="Item total" amountPaise={totals.subtotalPaise} />
+        <MoneyRow label="Delivery to your room" amountPaise={totals.deliveryFeePaise} />
+        <Divider dashed />
+        <MoneyRow label="To pay" amountPaise={totals.totalPaise} strong />
       </Card>
     </Screen>
   );

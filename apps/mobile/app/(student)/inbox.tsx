@@ -1,4 +1,4 @@
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { NotificationWithOrder } from '@canteza/api';
 import {
@@ -17,8 +17,9 @@ import {
   useUnreadNotificationCount,
 } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
-import { Body, Card, EmptyState, ErrorState, Heading, Screen } from '../../src/components/ui';
-import { AppBar, SkeletonList } from '../../src/components/patterns';
+import { Card, columnStyle, EmptyState, ErrorState, Screen } from '../../src/components/ui';
+import { AppBar, Icon, SkeletonList } from '../../src/components/patterns';
+import { FadeIn } from '../../src/components/motion';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -68,7 +69,7 @@ export default function Inbox() {
 
   return (
     <Screen padded={false}>
-      <View style={{ paddingHorizontal: t.space.lg, paddingTop: t.space.sm }}>
+      <View style={[columnStyle(t), { paddingHorizontal: t.space.lg, paddingTop: t.space.sm }]}>
         <AppBar
           title="Notifications"
           subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
@@ -81,7 +82,7 @@ export default function Inbox() {
                 accessibilityLabel="Mark all as read"
                 hitSlop={t.hitSlop}
               >
-                <Body muted>Mark all</Body>
+                <Text style={[t.font.label, { color: t.color.primary }]}>Mark all read</Text>
               </Pressable>
             ) : undefined
           }
@@ -91,12 +92,23 @@ export default function Inbox() {
       <FlatList
         data={rows}
         keyExtractor={(row) => row.id}
-        contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
+        contentContainerStyle={[
+          columnStyle(t),
+          { padding: t.space.lg, paddingTop: 0, gap: t.space.md },
+        ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <EmptyState title="Nothing yet" body="Updates about your orders will arrive here." />
+          <EmptyState
+            emoji="🔔"
+            title="Nothing yet"
+            body="Updates about your orders will arrive here."
+          />
         }
-        renderItem={({ item }) => <NotificationRow row={item} />}
+        renderItem={({ item, index }) => (
+          <FadeIn index={index}>
+            <NotificationRow row={item} />
+          </FadeIn>
+        )}
         refreshing={notifications.isFetching}
         onRefresh={() => void notifications.refetch()}
       />
@@ -132,34 +144,54 @@ function NotificationRow({ row }: { row: NotificationWithOrder }) {
   }
 
   return (
-    <Pressable
+    <Card
       onPress={open}
-      accessibilityRole="button"
       accessibilityLabel={`${content.title}. ${content.body}${unread ? '. Unread' : ''}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      highlight={unread}
+      padding="md"
+      style={unread ? undefined : { opacity: 0.8 }}
     >
-      <Card style={unread ? { borderColor: t.color.primary, borderWidth: 1.5 } : { opacity: 0.75 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
-          {/* The dot repeats what the border says, so it is hidden from a screen
-           * reader — "Unread" is already in the row's label above. */}
-          {unread ? (
-            <View
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: t.radius.pill,
-                backgroundColor: t.color.primary,
-              }}
-            />
-          ) : null}
-          <Heading level="heading">{content.title}</Heading>
+      <View style={{ flexDirection: 'row', gap: t.space.md }}>
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: unread ? t.color.primarySoft : t.color.surfaceAlt,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon
+            name={unread ? 'notifications' : 'notifications-outline'}
+            size={18}
+            color={unread ? t.color.primary : t.color.textMuted}
+          />
         </View>
-
-        <Body muted>{content.body}</Body>
-        <Body muted>{formatCampusDateTime(row.created_at)}</Body>
-      </Card>
-    </Pressable>
+        <View style={{ flex: 1, gap: t.space.xxs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+            <Text style={[t.font.heading, { color: t.color.text, flex: 1 }]}>{content.title}</Text>
+            {/* The dot repeats what the outline says, so it is hidden from a screen
+             * reader — "Unread" is already in the row's label above. */}
+            {unread ? (
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: t.radius.pill,
+                  backgroundColor: t.color.primary,
+                }}
+              />
+            ) : null}
+          </View>
+          <Text style={[t.font.body, { color: t.color.textMuted }]}>{content.body}</Text>
+          <Text style={[t.font.caption, { color: t.color.textFaint }]}>
+            {formatCampusDateTime(row.created_at)}
+          </Text>
+        </View>
+      </View>
+    </Card>
   );
 }

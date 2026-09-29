@@ -3,6 +3,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import {
+  formatCampusDateTime,
   formatPaise,
   nextStatusesFor,
   STUDENT_STATUS_LABEL,
@@ -20,17 +21,17 @@ import { confirm, notify } from '../../src/lib/dialog';
 import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
   Badge,
-  Body,
   Button,
   Card,
+  columnStyle,
   EmptyState,
   ErrorState,
-  Heading,
   Loading,
   Screen,
 } from '../../src/components/ui';
 import { OrderLines, StatusPill } from '../../src/components/order';
-import { AppBar, IconButton } from '../../src/components/patterns';
+import { AppBar, Divider, Fact, IconButton } from '../../src/components/patterns';
+import { FadeIn, webInteractive } from '../../src/components/motion';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -85,6 +86,7 @@ export default function CanteenOrders() {
     return (
       <Screen>
         <EmptyState
+          emoji="🛠️"
           title="Waiting for setup"
           body="This account is not linked to a canteen yet. An admin needs to finish onboarding it."
         />
@@ -95,14 +97,18 @@ export default function CanteenOrders() {
 
   return (
     <Screen padded={false}>
-      <View style={{ padding: t.space.lg, paddingBottom: 0, gap: t.space.md }}>
+      <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.md }]}>
         <AppBar
           title="Orders"
-          subtitle="Live — new orders arrive on their own"
+          subtitle="● Live — new orders arrive on their own"
           right={
             <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-              <IconButton glyph="☰" label="Menu" onPress={() => router.push('/menu')} />
-              <IconButton glyph="⏻" label="Sign out" onPress={confirmSignOut} />
+              <IconButton
+                icon="restaurant-outline"
+                label="Menu"
+                onPress={() => router.push('/menu')}
+              />
+              <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
             </View>
           }
         />
@@ -115,7 +121,18 @@ export default function CanteenOrders() {
          * on the primary fill, and the old default put near-black on orange, which
          * is the one combination in this palette that fails contrast.
          */}
-        <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+        <View
+          style={[
+            {
+              flexDirection: 'row',
+              gap: t.space.xs,
+              padding: t.space.xs,
+              borderRadius: t.radius.md + 2,
+              backgroundColor: t.color.surface,
+            },
+            t.elevation.card,
+          ]}
+        >
           {TABS.map((item) => {
             const selected = item.key === tab.key;
             // Undefined for "Done", which is not counted, and 0 for a live tab with
@@ -135,17 +152,20 @@ export default function CanteenOrders() {
                 accessibilityLabel={
                   count ? `${item.label}, ${count} order${count === 1 ? '' : 's'}` : item.label
                 }
-                style={({ pressed }) => ({
-                  flex: 1,
-                  minHeight: t.minTouchTarget,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: t.space.xs,
-                  borderRadius: t.radius.md,
-                  backgroundColor: selected ? t.color.primary : t.color.surfaceAlt,
-                  opacity: pressed ? 0.85 : 1,
-                })}
+                style={({ pressed }) => [
+                  webInteractive(t.motion.instant),
+                  {
+                    flex: 1,
+                    minHeight: t.minTouchTarget - 4,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: t.space.xs,
+                    borderRadius: t.radius.md,
+                    backgroundColor: selected ? t.color.primary : 'transparent',
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
               >
                 <Text
                   style={[
@@ -202,10 +222,16 @@ export default function CanteenOrders() {
         <FlatList
           data={orders.data ?? []}
           keyExtractor={(order) => order.id}
-          contentContainerStyle={{ padding: t.space.lg, gap: t.space.md }}
-          renderItem={({ item }) => <OrderCard order={item} />}
+          contentContainerStyle={[columnStyle(t), { padding: t.space.lg, gap: t.space.md }]}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <FadeIn index={index}>
+              <OrderCard order={item} />
+            </FadeIn>
+          )}
           ListEmptyComponent={
             <EmptyState
+              emoji={tab.key === 'new' ? '🔔' : tab.key === 'done' ? '✅' : '🍳'}
               title={`Nothing ${tab.label.toLowerCase()}`}
               body="New orders appear here the moment a student places one."
             />
@@ -260,24 +286,42 @@ function OrderCard({ order }: { order: OrderWithItems }) {
   }
 
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-        <Heading level="title">{order.code}</Heading>
+    <Card highlight={status === 'pending'}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+        <View style={{ flex: 1, gap: t.space.xxs }}>
+          <Text style={[t.font.title, { color: t.color.text }]}>{order.code}</Text>
+          <Text style={[t.font.caption, { color: t.color.textMuted }]}>
+            {formatCampusDateTime(order.created_at)}
+          </Text>
+        </View>
         <StatusPill status={order.status} />
       </View>
 
       <OrderLines items={order.order_items ?? []} />
 
-      <View style={{ height: 1, backgroundColor: t.color.border }} />
+      <Divider dashed />
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.space.md }}>
-        <Body muted>
-          {order.hostel_label} · {order.block}-{order.room}
-        </Body>
-        <Heading level="heading">{formatPaise(order.total_paise)}</Heading>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: t.space.md,
+        }}
+      >
+        <Fact
+          icon="location-outline"
+          label={`${order.hostel_label} · ${order.block}-${order.room}`}
+          strong
+        />
+        <Text style={[t.font.priceLg, { color: t.color.text }]}>
+          {formatPaise(order.total_paise)}
+        </Text>
       </View>
 
-      {order.delivery_note ? <Body muted>“{order.delivery_note}”</Body> : null}
+      {order.delivery_note ? (
+        <Text style={[t.font.body, { color: t.color.textMuted }]}>“{order.delivery_note}”</Text>
+      ) : null}
 
       {order.delivery_partner_id ? (
         <Badge label="A delivery partner has this order" tone="info" />
@@ -288,6 +332,17 @@ function OrderCard({ order }: { order: OrderWithItems }) {
           {actions.map((to) => (
             <Button
               key={to}
+              icon={
+                to === 'rejected'
+                  ? 'close'
+                  : to === 'accepted'
+                    ? 'checkmark'
+                    : to === 'preparing'
+                      ? 'flame-outline'
+                      : to === 'ready'
+                        ? 'bag-check-outline'
+                        : 'bicycle'
+              }
               label={ACTION_LABEL[to] ?? STUDENT_STATUS_LABEL[to]}
               variant={to === 'rejected' ? 'danger' : 'primary'}
               onPress={() => act(to)}

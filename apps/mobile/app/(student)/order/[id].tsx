@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { paymentOf, type OrderWithItems } from '@canteza/api';
 import {
@@ -7,6 +7,7 @@ import {
   canStudentCancel,
   formatPaise,
   isTerminal,
+  STUDENT_STATUS_LABEL,
   toAppError,
   type OrderStatus,
 } from '@canteza/shared';
@@ -34,9 +35,10 @@ import {
   Loading,
   Screen,
 } from '../../../src/components/ui';
-import { MoneyRow, OrderLines, ProgressTrail, StatusPill } from '../../../src/components/order';
-import { AppBar, SectionHeader } from '../../../src/components/patterns';
+import { MoneyRow, OrderLines, ProgressTrail } from '../../../src/components/order';
+import { AppBar, CardTitle, Divider, Icon } from '../../../src/components/patterns';
 import { ReorderButton } from '../../../src/components/reorder';
+import { FadeIn } from '../../../src/components/motion';
 import { useTheme } from '../../../src/theme';
 
 /**
@@ -115,7 +117,6 @@ export default function OrderTracker() {
         title={data.code}
         subtitle={data.canteen_name_snapshot ?? undefined}
         onBack={() => router.replace('/')}
-        right={<StatusPill status={data.status} />}
       />
 
       {/*
@@ -130,6 +131,8 @@ export default function OrderTracker() {
         />
       ) : null}
 
+      <StatusHero status={status} canteen={data.canteen_name_snapshot} />
+
       {!isTerminal(status) ? (
         <Card>
           <ProgressTrail status={data.status} />
@@ -142,23 +145,41 @@ export default function OrderTracker() {
        * because "where is it going" is asked far more often than "what did it cost".
        */}
       <Card>
-        <SectionHeader title="Delivering to" />
-        <Heading level="heading">{data.hostel_label}</Heading>
-        <Body>
-          Block {data.block} · Room {data.room}
-        </Body>
-        {data.delivery_note ? <Body muted>“{data.delivery_note}”</Body> : null}
+        <CardTitle
+          icon="location-outline"
+          title={data.hostel_label}
+          subtitle={`Block ${data.block} · Room ${data.room}`}
+        />
+        {data.delivery_note ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: t.space.sm,
+              padding: t.space.md,
+              borderRadius: t.radius.md,
+              backgroundColor: t.color.surfaceAlt,
+            }}
+          >
+            <Icon name="chatbubble-ellipses-outline" size={16} color={t.color.textMuted} />
+            <Body muted>“{data.delivery_note}”</Body>
+          </View>
+        ) : null}
       </Card>
 
       <Card>
-        <Heading level="heading">Items</Heading>
+        <CardTitle
+          icon="receipt-outline"
+          title="Your order"
+          subtitle={data.canteen_name_snapshot ?? undefined}
+        />
         <OrderLines items={data.order_items ?? []} />
-        <View style={{ height: 1, backgroundColor: t.color.border }} />
-        <MoneyRow label="Subtotal" amountPaise={data.subtotal_paise} />
+        <Divider dashed />
+        <MoneyRow label="Item total" amountPaise={data.subtotal_paise} />
         {data.discount_paise > 0 ? (
           <MoneyRow label="Discount" amountPaise={-data.discount_paise} />
         ) : null}
-        <MoneyRow label="Delivery" amountPaise={data.delivery_fee_paise} />
+        <MoneyRow label="Delivery to your room" amountPaise={data.delivery_fee_paise} />
+        <Divider dashed />
         <MoneyRow label="Total" amountPaise={data.total_paise} strong />
         {!prepaid ? (
           <Badge label={`Pay ${formatPaise(data.total_paise)} in cash on delivery`} tone="info" />
@@ -186,6 +207,7 @@ export default function OrderTracker() {
 
       {cancellable ? (
         <Button
+          icon="close-circle-outline"
           label="Cancel order"
           variant="danger"
           onPress={cancel}
@@ -199,8 +221,9 @@ export default function OrderTracker() {
       ) : null}
 
       <Button
+        icon="help-buoy-outline"
         label="Report a problem"
-        variant="secondary"
+        variant="ghost"
         onPress={() => router.push(`/support?order=${orderId}`)}
       />
     </Screen>
@@ -432,7 +455,11 @@ function Stars({
             opacity: pressed ? 0.8 : 1,
           })}
         >
-          <Heading level="heading">{star <= value ? '★' : '☆'}</Heading>
+          <Icon
+            name={star <= value ? 'star' : 'star-outline'}
+            size={22}
+            color={star <= value ? t.color.primary : t.color.textMuted}
+          />
         </Pressable>
       ))}
     </View>
@@ -452,3 +479,62 @@ function Stars({
  * at all. Sold-out ones are dropped for a softer reason -- carrying one into a cart that
  * will refuse to check out is worse than saying so here.
  */
+
+/**
+ * What is happening, in words and one picture, at the top of the tracker. The trail
+ * below says where the order is on its path; this says what that means for the student
+ * right now. Wording only -- the status itself, and what may happen next, still come
+ * from the state machine in packages/shared.
+ */
+const STATUS_STORY: Record<OrderStatus, { emoji: string; line: string }> = {
+  pending: { emoji: '⏳', line: 'The canteen will accept it in a moment.' },
+  accepted: { emoji: '👨‍🍳', line: 'The kitchen has your order.' },
+  preparing: { emoji: '🍳', line: 'Your food is being cooked right now.' },
+  ready: { emoji: '📦', line: 'Packed and waiting at the counter.' },
+  assigned: { emoji: '🛵', line: 'A delivery partner is heading to the counter.' },
+  picked_up: { emoji: '🛵', line: 'On its way to your room.' },
+  delivered: { emoji: '✅', line: 'Delivered. Enjoy your meal!' },
+  cancelled: { emoji: '✖️', line: 'This order was cancelled.' },
+  rejected: { emoji: '✖️', line: 'The canteen could not take this order.' },
+};
+
+function StatusHero({ status, canteen }: { status: OrderStatus; canteen: string | null }) {
+  const t = useTheme();
+  const story = STATUS_STORY[status];
+  const failed = status === 'cancelled' || status === 'rejected';
+  const done = status === 'delivered';
+  const soft = failed ? t.color.dangerSoft : done ? t.color.successSoft : t.color.primarySoft;
+  const strong = failed ? t.color.danger : done ? t.color.success : t.color.primary;
+
+  return (
+    <FadeIn>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.lg }}>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: t.radius.lg,
+            backgroundColor: soft,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 30 }}>{story?.emoji ?? '🍽️'}</Text>
+        </View>
+        <View style={{ flex: 1, gap: t.space.xxs }}>
+          <Text style={[t.font.overline, { color: strong }]}>
+            {canteen ? canteen.toUpperCase() : 'YOUR ORDER'}
+          </Text>
+          <Text style={[t.font.title, { color: t.color.text }]}>
+            {STUDENT_STATUS_LABEL[status] ?? status}
+          </Text>
+          {story ? (
+            <Text style={[t.font.body, { color: t.color.textMuted }]}>{story.line}</Text>
+          ) : null}
+        </View>
+      </Card>
+    </FadeIn>
+  );
+}
