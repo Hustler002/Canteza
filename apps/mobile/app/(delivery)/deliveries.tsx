@@ -1,4 +1,4 @@
-import { Alert, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import { formatPaise, toAppError } from '@canteza/shared';
@@ -10,6 +10,7 @@ import {
   useOrdersRealtime,
   useShift,
 } from '../../src/lib/queries';
+import { notify } from '../../src/lib/dialog';
 import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
   Badge,
@@ -78,7 +79,7 @@ export default function Deliveries() {
           carrying={carrying.length}
           onToggle={(next) =>
             shift.setOnline.mutate(next, {
-              onError: (err) => Alert.alert('Could not change shift', toAppError(err).userMessage),
+              onError: (err) => notify('Could not change shift', toAppError(err).userMessage),
             })
           }
         />
@@ -186,7 +187,7 @@ function DeliveryCard({ order }: { order: OrderWithItems }) {
     claim.mutate(order.id, {
       // Two partners can tap at the same instant. The loser is told plainly; the
       // list refreshes either way, so the order simply stops being offered.
-      onError: (err) => Alert.alert('Could not take it', toAppError(err).userMessage),
+      onError: (err) => notify('Could not take it', toAppError(err).userMessage),
     });
   }
 

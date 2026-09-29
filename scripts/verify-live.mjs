@@ -24,10 +24,12 @@ import { createClient } from '@supabase/supabase-js';
 
 const URL_BASE = process.env.SUPABASE_URL;
 const ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const PASSWORD = process.env.SEED_PASSWORD ?? 'campus1234';
+// No default: the old one was published in this public repo while it still opened a live
+// admin account. See supabase/seed-users.mjs.
+const PASSWORD = process.env.SEED_PASSWORD;
 
-if (!URL_BASE || !ANON_KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY. See .env.example.');
+if (!URL_BASE || !ANON_KEY || !PASSWORD) {
+  console.error('Missing SUPABASE_URL, SUPABASE_ANON_KEY or SEED_PASSWORD. See .env.example.');
   process.exit(1);
 }
 // A legacy key carries `service_role` in its JWT payload. A newer `sb_secret_...` key

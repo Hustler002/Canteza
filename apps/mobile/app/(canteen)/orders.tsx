@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isAwaitingOnboarding, type OrderWithItems } from '@canteza/api';
 import {
@@ -16,6 +16,7 @@ import {
   useOrdersRealtime,
   useTransitionOrder,
 } from '../../src/lib/queries';
+import { confirm, notify } from '../../src/lib/dialog';
 import { useConfirmSignOut, useIdentity } from '../../src/lib/session';
 import {
   Badge,
@@ -230,26 +231,29 @@ function OrderCard({ order }: { order: OrderWithItems }) {
       transition.mutate(
         { orderId: order.id, to, ...(reason ? { reason } : {}) },
         {
-          onError: (err) => Alert.alert('Could not update', toAppError(err).userMessage),
+          onError: (err) => notify('Could not update', toAppError(err).userMessage),
         },
       );
 
     if (to === 'rejected') {
-      Alert.alert('Reject this order?', `${order.code} will be cancelled and the student told.`, [
-        { text: 'Keep it', style: 'cancel' },
-        { text: 'Reject', style: 'destructive', onPress: () => run('rejected by canteen') },
-      ]);
+      confirm({
+        title: 'Reject this order?',
+        message: `${order.code} will be cancelled and the student told.`,
+        cancelLabel: 'Keep it',
+        confirmLabel: 'Reject',
+        destructive: true,
+        onConfirm: () => run('rejected by canteen'),
+      });
       return;
     }
     if (to === 'delivered') {
-      Alert.alert(
-        'Delivered by you?',
-        'Use this only when no delivery partner is on shift and you took it yourself.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes, delivered', onPress: () => run() },
-        ],
-      );
+      confirm({
+        title: 'Delivered by you?',
+        message: 'Use this only when no delivery partner is on shift and you took it yourself.',
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Yes, delivered',
+        onConfirm: () => run(),
+      });
       return;
     }
     run();

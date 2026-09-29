@@ -4,7 +4,7 @@ import { createCampusClient } from '../src/client';
 
 describe('validatePassword', () => {
   it('accepts a reasonable password', () => {
-    expect(validatePassword('campus1234')).toBeNull();
+    expect(validatePassword('hostel2026')).toBeNull();
   });
 
   it('rejects short, letter-only or digit-only passwords before the round trip', () => {

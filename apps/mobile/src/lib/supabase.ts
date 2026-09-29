@@ -71,3 +71,11 @@ AppState.addEventListener('change', (state) => {
     void supabase.auth.stopAutoRefresh();
   }
 });
+
+// The listener only hears *changes*. An app opened straight into the foreground -- and
+// on the web, a tab that is simply left open and visible -- never changes state, so the
+// timer never started. supabase-js still refreshes an expired token before each request,
+// which is why this went unnoticed; the realtime socket gets no such rescue.
+if (AppState.currentState === 'active') {
+  void supabase.auth.startAutoRefresh();
+}

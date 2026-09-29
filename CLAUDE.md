@@ -22,6 +22,23 @@ deploy are still to do.
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
 
+> **Security, 2026-09-29.** The repo is **public**, and until that day it held the demo
+> password in `seed-users.mjs` and `verify-live.mjs` while the same ten accounts —
+> **an admin among them** — lived on the hosted project. With the publishable key also in
+> the repo, anyone could have signed in as admin through the API. **Audit:** no evidence of
+> unauthorized access. The last 24 h of platform logs (all that exists on this plan) show
+> only this machine (`node`), the test phone (`okhttp`) and Supabase's own runtime, all
+> from one Indian mobile range or Supabase itself; the table audit log is empty on this
+> project; and the data shows no change an attacker would make — one admin, ten seeded
+> users, no roles moved, nothing disabled, coupons and menus as seeded. Reads before the
+> log window cannot be ruled out. **Done:** the six accounts `verify:live` uses got a
+> random password, stored only as `SEED_PASSWORD` in the root `.env` (now required — no
+> default anywhere); `meera`, `night.canteen`, `imran` and `hostel.canteen` are **banned**
+> (reversible, with a random password nobody holds — re-enable with
+> `auth.admin.updateUserById(id, { ban_duration: 'none', password })`); every session was
+> revoked. No other secret has ever been committed — checked across all of git history.
+> **Rule: no credential is ever a literal in this repo, not even a demo one.**
+
 ```
 ✅ Phase 0  assessment, architecture, ADRs
 ✅ Phase 1  monorepo, tooling, shared domain core + 33 tests
@@ -165,14 +182,14 @@ npm run db:push        # deploy migrations to the linked project
 blocked on things only an account holder can supply, and it is worth knowing which,
 because the order is forced rather than chosen:
 
-| Track        | State          | Blocked on                                                                                                                        |
-| ------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| In-app inbox | ✅ done        | —                                                                                                                                 |
-| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending          |
-| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used |
-| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                            |
-| EAS / Vercel | 🔶 EAS done    | Android dev build exists and runs on a real phone. Vercel still needs an account                                                  |
-| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                    |
+| Track        | State          | Blocked on                                                                                                                                       |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| In-app inbox | ✅ done        | —                                                                                                                                                |
+| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                         |
+| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                |
+| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                           |
+| EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Web app built and checked in a browser; not deployed** — needs a Vercel account (`apps/mobile/WEB.md`) |
+| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                   |
 
 **That fork has been taken:** push, Sentry and the Razorpay sheet all needed a
 development build rather than Expo Go, and one now exists (`apps/mobile/EAS.md`). It is
@@ -352,7 +369,10 @@ The shape, and why each piece is where it is:
 
 ### Sentry
 
-**Written, off, and needing a build.** `@sentry/react-native` ~7.11.0 (what
+**Built in, and off until the DSN reaches `.env`.** The Sentry development build
+(EAS `1843d5b0`, 2026-09-28) compiled `:sentry_react-native` alongside
+`processDebugGoogleServices` and `react-native-razorpay`, and made no source-map upload
+(debug variant, as `sentry.gradle` says). Not yet proven: an event reaching Sentry. `@sentry/react-native` ~7.11.0 (what
 `expo install` picks for SDK 57) is installed; `src/lib/sentry.ts` starts it,
 `Sentry.wrap` wraps the root layout, the query client offers every failed query and
 mutation to `reportIfUnexpected`, and the session tags events. Setup steps are in
@@ -371,6 +391,69 @@ mutation to `reportIfUnexpected`, and the session tags events. Setup steps are i
 - **A release build needs `SENTRY_AUTH_TOKEN`** (EAS secret) or fails at the source-map
   upload; a development build does not, because `sentry.gradle` uploads only for
   non-debug variants. Read from the package source, not assumed.
+- **Configured (2026-09-28):** org `moneytrail`, project `canteza-mobile`, in the plugin
+  entry in `app.json`; the DSN in all three `eas.json` profiles. **Not yet in
+  `apps/mobile/.env`, on purpose**: with a DSN the SDK looks for its native module, and
+  an APK built without it answers every reload with a "could not connect" alert.
+- **Changing an `EXPO_PUBLIC_*` value locally needs Metro restarted with `--clear`.**
+  Proven, not assumed: an export with `EXPO_PUBLIC_SENTRY_DSN` set produced a bundle
+  without it until the cache was cleared — Metro had kept the transform from when the
+  value was absent. The same applies to `expo start`.
+- **`@sentry/cli`'s install script is not approved** (npm 11 `allowScripts` lists only
+  esbuild). It downloads the binary that uploads source maps, so it matters for the first
+  release build, not the development one — approving it is a decision for then.
+- **A test error is one shake away** in any development build: "Sentry: send a test
+  error" and "Sentry: crash the app (native)" in the dev menu (`dev-menu.ts`). A release
+  bundle contains neither — checked by grepping the exported bundle.
+
+## The web app
+
+**Decided 2026-09-29: launch on the web first.** A Play Store account costs $25 up front;
+the same `apps/mobile` code runs in a browser through `react-native-web`, reaches iPhone
+users an APK cannot, and deploys free on Vercel. The Android build stays; the Play Store
+waits until the web version earns. Deploy steps, and what differs from the phone, are in
+**`apps/mobile/WEB.md`**.
+
+**How it differs, and how that is kept honest.** Each platform-specific piece is a
+`.web.ts` file beside its phone version, exporting the same functions — Metro picks it
+for the browser, so no screen branches on platform:
+
+- `storage.web.ts` — browser storage for the session. `expo-secure-store`'s web module
+  is an **empty object** (read in the package), so without it nobody could sign in.
+- `dialog.ts` / `dialog.web.ts` — **the only place `Alert` is called.** react-native-web's
+  `Alert.alert` is a no-op, and 14 actions — cancel, reject, give back, sign out — waited
+  on a dialog's button, so on the web they silently did nothing. The browser's own
+  `confirm` spells out both labels (`OK: Reject · Cancel: Keep it`).
+  `test/dialog.test.ts` fails if any other file mentions `Alert`; proven on a probe.
+- `razorpay.web.ts` — Razorpay **Standard Checkout** (`checkout.js`, loaded on first use
+  only) against the same `create-payment` order and key. Same contract as the phone: the
+  promise ends only on "finished" or "closed", a declined card keeps the sheet open, and
+  only the webhook marks anything paid. `test/razorpay-web.test.ts` pins it.
+  **UPI shows only when the Razorpay account enables it** — today `upi: false`.
+- **No push on the web yet.** `PushBridge` is not mounted there: expo-notifications has
+  no `getLastNotificationResponse` on the web, so `useLastNotificationResponse` throws
+  `UnavailabilityError` the moment anyone signs in (read in the package source). Web push
+  means a service worker and VAPID keys — its own piece of work.
+
+**Also fixed on the way, for both platforms:** token auto-refresh only ever started on an
+`AppState` _change_, so an app opened straight into the foreground — and a browser tab
+simply left open — never started it. It now starts at load when the app is active.
+
+**Installable ("Add to Home Screen").** `public/manifest.json`, `public/index.html` (a
+copy of Expo's template plus the manifest and touch-icon links), and 192/512/180 px icons
+generated from `assets/icon.png` by `npm run web:icons`. **Expo substitutes the template's
+language and title placeholders once each, with `String.replace`**, so neither may be
+written twice in that file — a comment that named them sat above the real ones and would
+have shipped a page titled with the raw placeholder. `vercel.json` falls back to
+`index.html` for every path (deep links like `/order/…` load the app, checked), caches
+hashed bundles for a year and sets three security headers.
+
+**Proven in a browser (production build served like Vercel):** loads with no console
+errors; manifest valid and both icons 200; a deep link returns the app; a signed-in page
+opened while signed out goes to sign-in; `checkout.js` loads and defines `Razorpay`.
+**Not proven:** anything after sign-in on the web — the credentials would go to the
+hosted Supabase project, which this session's browser rules do not allow Claude to type —
+so the signed-in screens, the dialogs and the Razorpay sheet in a browser need a person.
 
 ## The mobile design system
 
@@ -611,8 +694,8 @@ Departures from the original brief, all argued in the ADRs:
   The counter's menu screen is in the same position: the **data path underneath it is
   proven live** (`verify:live` §5, seven checks through real canteen and student
   sign-ins) and it compiles into the Android bundle, but nobody has tapped the buttons.
-  Running it needs a device — `expo start --web` would want `react-native-web` and
-  `react-dom`, two dependencies this app does not have and should not grow for a test.
+  Running it needed a device. That changed on 2026-09-29: the app now also targets the
+  web (see "The web app"), so `react-native-web` and `react-dom` are real dependencies.
 - PGlite is single-connection, so the race tests verify the **guard** sequentially (A claims,
   B is refused) rather than firing two transactions in parallel. The atomicity is Postgres's
   own, but when Docker is available, re-run the claim scenario against `supabase start` with
@@ -949,8 +1032,9 @@ Two notes that outlived the work:
 
 **Still unverified:** `apps/mobile`. The database, the API layer and the whole admin
 dashboard are proven against the live project; the Expo app is not. Run
-`npm run dev:mobile` with `EXPO_PUBLIC_SUPABASE_*` set, sign in as riya@campus.edu /
-campus1234, place an order, and watch it reach main.canteen@campus.edu and vikram@campus.edu.
+`npm run dev:mobile` with `EXPO_PUBLIC_SUPABASE_*` set, sign in as riya@campus.edu (the
+password is `SEED_PASSWORD` in `.env`), place an order, and watch it reach
+main.canteen@campus.edu and vikram@campus.edu.
 
 Keep `npm run verify` green, then update this file and `docs/roadmap.md`. **Do not
 commit** — leave the work staged for review.

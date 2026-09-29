@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { MenuItem } from '@canteza/api';
 import { BRAND, estimatedMinutes, formatPaise, toAppError } from '@canteza/shared';
@@ -10,6 +10,7 @@ import {
   useMenu,
   useToggleFavorite,
 } from '../../../src/lib/queries';
+import { confirm } from '../../../src/lib/dialog';
 import { useIdentity } from '../../../src/lib/session';
 import { useCart } from '../../../src/store/cart';
 import {
@@ -160,21 +161,18 @@ function MenuRow({
     // rather than letting checkout fail with CART_MIXED_CANTEENS.
     if (wouldConflict(canteenId)) {
       setBusy(true);
-      Alert.alert(
-        'Start a new cart?',
-        `Your cart has items from another canteen. ${BRAND.name} can only deliver from one canteen at a time.`,
-        [
-          { text: 'Keep my cart', style: 'cancel', onPress: () => setBusy(false) },
-          {
-            text: 'Start new cart',
-            style: 'destructive',
-            onPress: () => {
-              replaceWith(canteenId, item.id);
-              setBusy(false);
-            },
-          },
-        ],
-      );
+      confirm({
+        title: 'Start a new cart?',
+        message: `Your cart has items from another canteen. ${BRAND.name} can only deliver from one canteen at a time.`,
+        cancelLabel: 'Keep my cart',
+        confirmLabel: 'Start new cart',
+        destructive: true,
+        onConfirm: () => {
+          replaceWith(canteenId, item.id);
+          setBusy(false);
+        },
+        onCancel: () => setBusy(false),
+      });
       return;
     }
     add(canteenId, item.id);

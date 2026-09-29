@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { paymentOf, type OrderWithItems } from '@canteza/api';
 import {
@@ -19,6 +19,7 @@ import {
   usePayForOrder,
   useTransitionOrder,
 } from '../../../src/lib/queries';
+import { confirm, notify } from '../../../src/lib/dialog';
 import { useIdentity } from '../../../src/lib/session';
 import {
   Badge,
@@ -89,23 +90,23 @@ export default function OrderTracker() {
   const prepaid = payment !== null && payment.method !== 'cod';
 
   function cancel() {
-    Alert.alert('Cancel this order?', 'The canteen has not started cooking yet.', [
-      { text: 'Keep it', style: 'cancel' },
-      {
-        text: 'Cancel order',
-        style: 'destructive',
-        onPress: () =>
-          transition.mutate(
-            { orderId, to: 'cancelled', reason: 'cancelled by student' },
-            {
-              onError: (err) =>
-                // The canteen may have accepted in the same second; that is a real
-                // outcome, not a glitch, so it is said plainly.
-                Alert.alert('Could not cancel', toAppError(err).userMessage),
-            },
-          ),
-      },
-    ]);
+    confirm({
+      title: 'Cancel this order?',
+      message: 'The canteen has not started cooking yet.',
+      cancelLabel: 'Keep it',
+      confirmLabel: 'Cancel order',
+      destructive: true,
+      onConfirm: () =>
+        transition.mutate(
+          { orderId, to: 'cancelled', reason: 'cancelled by student' },
+          {
+            onError: (err) =>
+              // The canteen may have accepted in the same second; that is a real
+              // outcome, not a glitch, so it is said plainly.
+              notify('Could not cancel', toAppError(err).userMessage),
+          },
+        ),
+    });
   }
 
   return (

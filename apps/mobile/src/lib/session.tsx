@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Alert } from 'react-native';
 import { getIdentity, queryKeys, type Identity } from '@canteza/api';
 import { toAppError, type AppError } from '@canteza/shared';
 import { supabase } from './supabase';
 import { queryClient } from './query';
 import { unregisterForPush } from './push';
 import { signOutConsequence } from './sign-out';
+import { confirm } from './dialog';
 import { identify } from './sentry';
 import { useCart } from '../store/cart';
 
@@ -123,10 +123,14 @@ export function useConfirmSignOut(): () => void {
   const { signOut, identity } = useSession();
 
   return () => {
-    Alert.alert('Sign out?', signOutConsequence(identity?.role, useCart.getState().lines.length), [
-      { text: 'Stay signed in', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-    ]);
+    confirm({
+      title: 'Sign out?',
+      message: signOutConsequence(identity?.role, useCart.getState().lines.length),
+      cancelLabel: 'Stay signed in',
+      confirmLabel: 'Sign out',
+      destructive: true,
+      onConfirm: () => void signOut(),
+    });
   };
 }
 

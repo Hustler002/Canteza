@@ -33,7 +33,15 @@ if (/supabase\.co/.test(URL_BASE) && !process.env.ALLOW_REMOTE_SEED) {
   process.exit(1);
 }
 
-const PASSWORD = 'campus1234';
+// From the environment, never the source. The demo password was once a literal here, in a
+// public repo, while the same accounts -- an admin among them -- lived on the hosted
+// project; anyone reading the repo could sign in as that admin. Rotated 2026-09-29.
+// A literal here again would publish the next one too.
+const PASSWORD = process.env.SEED_PASSWORD;
+if (!PASSWORD || PASSWORD.length < 16) {
+  console.error('Set SEED_PASSWORD in .env: a long random value, never committed.');
+  process.exit(1);
+}
 
 const CANTEENS = {
   main: 'c0000000-0000-4000-8000-000000000001',
@@ -252,7 +260,8 @@ async function main() {
     await setHours(savedHours);
   }
 
-  console.log(`\nDone. Every account's password is "${PASSWORD}".`);
+  // The password is not echoed: terminal output ends up in CI logs and screenshots.
+  console.log('\nDone. Every account uses SEED_PASSWORD from .env.');
 }
 
 /** `ids` maps each seeded person key to their profile id, built in main(). */

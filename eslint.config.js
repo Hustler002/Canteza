@@ -17,7 +17,7 @@ export default tseslint.config(
   },
   {
     // Node scripts: a CLI seeder or generator is allowed to talk to the terminal.
-    files: ['supabase/**/*.mjs', 'scripts/**/*.mjs'],
+    files: ['supabase/**/*.mjs', 'scripts/**/*.mjs', 'apps/*/scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         process: 'readonly',

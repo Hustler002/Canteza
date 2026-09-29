@@ -6,6 +6,20 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "@canteza/admin"],
       "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "--workspace", "@canteza/mobile", "--", "--port", "8090"],
+      "port": 8090
+    },
+    {
+      "name": "web-dist",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/Dell/AppData/Local/Temp/claude/C--Users-Dell-Github-FOOD-Delivery-Canteza/d800100d-441b-4d90-bd52-9996970fa1e6/scratchpad/serve-dist.mjs"
+      ],
+      "port": 8091
     }
   ]
 }

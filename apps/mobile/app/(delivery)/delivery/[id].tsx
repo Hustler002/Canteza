@@ -1,4 +1,5 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
+import { confirm, notify } from '../../../src/lib/dialog';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   BRAND,
@@ -82,46 +83,42 @@ export default function DeliveryDetail() {
 
   function act(to: OrderStatus) {
     if (to === 'ready') {
-      Alert.alert('Give this delivery back?', 'It returns to your canteen for someone else.', [
-        { text: 'Keep it', style: 'cancel' },
-        {
-          text: 'Give it back',
-          style: 'destructive',
-          onPress: () =>
-            release.mutate(orderId, {
-              onSuccess: () => router.replace('/deliveries'),
-              onError: (err) => Alert.alert('Could not release', toAppError(err).userMessage),
-            }),
-        },
-      ]);
+      confirm({
+        title: 'Give this delivery back?',
+        message: 'It returns to your canteen for someone else.',
+        cancelLabel: 'Keep it',
+        confirmLabel: 'Give it back',
+        destructive: true,
+        onConfirm: () =>
+          release.mutate(orderId, {
+            onSuccess: () => router.replace('/deliveries'),
+            onError: (err) => notify('Could not release', toAppError(err).userMessage),
+          }),
+      });
       return;
     }
 
     if (to === 'delivered') {
-      Alert.alert(
-        'Handed over?',
-        `Confirm you gave the food to the student and collected ${formatPaise(data.total_paise)} in cash.`,
-        [
-          { text: 'Not yet', style: 'cancel' },
-          {
-            text: 'Delivered',
-            onPress: () =>
-              transition.mutate(
-                { orderId, to },
-                {
-                  onSuccess: () => router.replace('/deliveries'),
-                  onError: (err) => Alert.alert('Could not update', toAppError(err).userMessage),
-                },
-              ),
-          },
-        ],
-      );
+      confirm({
+        title: 'Handed over?',
+        message: `Confirm you gave the food to the student and collected ${formatPaise(data.total_paise)} in cash.`,
+        cancelLabel: 'Not yet',
+        confirmLabel: 'Delivered',
+        onConfirm: () =>
+          transition.mutate(
+            { orderId, to },
+            {
+              onSuccess: () => router.replace('/deliveries'),
+              onError: (err) => notify('Could not update', toAppError(err).userMessage),
+            },
+          ),
+      });
       return;
     }
 
     transition.mutate(
       { orderId, to },
-      { onError: (err) => Alert.alert('Could not update', toAppError(err).userMessage) },
+      { onError: (err) => notify('Could not update', toAppError(err).userMessage) },
     );
   }
 

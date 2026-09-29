@@ -1,7 +1,9 @@
 // First, so a crash anywhere below -- including while the rest of this file loads --
 // is already being watched.
 import { Sentry } from '../src/lib/sentry';
+import { registerDevTools } from '../src/lib/dev-menu';
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -72,7 +74,15 @@ function RouteGuard() {
         <Stack.Screen name="(canteen)" />
         <Stack.Screen name="(delivery)" />
       </Stack>
-      {identity ? <PushBridge userId={identity.userId} role={identity.role} /> : null}
+      {/*
+       * Not on the web: expo-notifications has no getLastNotificationResponse there, so
+       * useLastNotificationResponse throws UnavailabilityError the moment anyone signs in.
+       * Web push would be a service worker and VAPID keys -- a separate piece of work; the
+       * inbox and realtime order updates already work in the browser without it.
+       */}
+      {identity && Platform.OS !== 'web' ? (
+        <PushBridge userId={identity.userId} role={identity.role} />
+      ) : null}
     </>
   );
 }
@@ -117,6 +127,8 @@ function PushBridge({ userId, role }: { userId: string; role: Role }) {
  * Wrapped so Sentry sees the whole tree: touch breadcrumbs and the root error boundary
  * come from `Sentry.wrap`, and cost nothing when no DSN is configured.
  */
+registerDevTools();
+
 function RootLayout() {
   const t = useTheme();
   return (
