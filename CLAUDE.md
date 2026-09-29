@@ -188,7 +188,7 @@ because the order is forced rather than chosen:
 | In-app inbox | ✅ done        | —                                                                                                                                                                                                                                                            |
 | Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                                                                     |
 | Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                                                                            |
-| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                                                                                                                                       |
+| Sentry       | 🔶 web proven  | Web: an error from a local production export reached Sentry (200). Live site needs `EXPO_PUBLIC_SENTRY_DSN` (+ `SENTRY_AUTH_TOKEN`) in Vercel. Phone: Sentry build exists, never sent an event                                                               |
 | EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); **admin live** at https://canteza-admin.vercel.app (`canteza-admin`). Both build from `main` (`apps/mobile/WEB.md`) |
 | CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                                                                               |
 
@@ -406,6 +406,32 @@ mutation to `reportIfUnexpected`, and the session tags events. Setup steps are i
 - **A test error is one shake away** in any development build: "Sentry: send a test
   error" and "Sentry: crash the app (native)" in the dev menu (`dev-menu.ts`). A release
   bundle contains neither — checked by grepping the exported bundle.
+
+**On the web (2026-09-29).** The same `sentry.ts` runs in the browser: on web the SDK
+installs the browser's global error handlers instead of the native ones (read in
+`integrations/default.js`). **Proven locally:** a production export with the DSN, served
+like Vercel, sent an uncaught error as two envelopes to `ingest.us.sentry.io`, both
+answered **200**. The live site reports only once `EXPO_PUBLIC_SENTRY_DSN` is a Vercel
+Production variable (`apps/mobile/WEB.md`) — it was built without one.
+
+- **Source maps:** `build:web` exports with `--source-maps`, and
+  `scripts/sentry-web-sourcemaps.mjs` uploads them through Sentry's own
+  `expo-upload-sourcemaps` when `SENTRY_AUTH_TOKEN` is set, then **always deletes them
+  from `dist`**. Sentry matches by the debug id `getSentryExpoConfig` stamps into each
+  bundle, so the site never needs to serve a map. A missing token or failed upload is a
+  warning, never a failed deploy. `test/sentry-web-sourcemaps.test.ts` runs it for real
+  against a stand-in `sentry-cli` (`SENTRY_CLI_EXECUTABLE`), and fails if a map is left
+  behind — proven on a probe.
+- **Sentry's upload script looks for the plugin `@sentry/react-native/expo`**; app.json
+  names `@sentry/react-native`, so org and project are passed as environment variables
+  read from app.json. Without that the script would shell out to `expo config` and exit 1.
+- **`sentry-cli` needs no install script:** it ships as per-platform optional packages
+  (`@sentry/cli-linux-x64` is in the lockfile), so npm 11's unapproved postinstall does
+  not matter for the web upload.
+- **`--clear` on `build:web`**, because a cached Metro transform can hide a changed
+  `EXPO_PUBLIC_*` value (above) — a DSN added in Vercel must not silently miss the bundle.
+- **Not proven:** an upload with a real token (that token is never given to Claude), and
+  events from the live site, until the Vercel variables exist.
 
 ## The web app
 

@@ -41,7 +41,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "web:icons": "node scripts/web-icons.mjs",
-    "build:web": "expo export --platform web"
+    "build:web": "expo export --platform web --clear --source-maps && node scripts/sentry-web-sourcemaps.mjs dist"
   },
   "private": true
 }

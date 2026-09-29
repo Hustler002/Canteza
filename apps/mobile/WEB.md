@@ -13,7 +13,7 @@ Next.js app. Both deploy to **Vercel's free plan**.
 | Confirmation dialogs | System alert (`dialog.ts`)     | Browser `confirm`/`alert` (`dialog.web.ts`)                   |
 | Online payment       | Razorpay native SDK            | Razorpay Standard Checkout, `checkout.js` (`razorpay.web.ts`) |
 | Push notifications   | Yes                            | **Not yet.** The 🔔 inbox and live order updates still work   |
-| Crash reporting      | Sentry (once the DSN is set)   | Off                                                           |
+| Crash reporting      | Sentry (once the DSN is set)   | Sentry, when `EXPO_PUBLIC_SENTRY_DSN` is set in Vercel        |
 
 A `.web.ts` file sits beside its phone version and exports the same functions; Metro
 picks it when bundling for the browser, so no screen checks which platform it is on.
@@ -39,6 +39,21 @@ Sign up at https://vercel.com with GitHub (free), then **Add New → Project →
 
 Do **not** add the service role key, the Razorpay secret or any other secret here. Every
 `EXPO_PUBLIC_` value is baked into the JavaScript anyone can download.
+
+**Sentry (optional, Production only):**
+
+- `EXPO_PUBLIC_SENTRY_DSN` = the DSN from `eas.json`. Turns error reporting on. A DSN
+  only lets a browser _send_ events, so it is safe in the bundle. Leave it off Preview so
+  preview deployments do not report as production.
+- `SENTRY_AUTH_TOKEN` = an organization auth token from Sentry (Settings → Auth Tokens),
+  marked **Sensitive**. This one **is** a secret: it is read only by the build, which uses
+  it to upload source maps so stack traces are readable. It never reaches the bundle.
+
+`npm run build:web` exports with `--source-maps`, uploads them when the token is set,
+and **always deletes them from the site** (`scripts/sentry-web-sourcemaps.mjs`). A
+missing token or a failed upload is a warning in the build log, not a failed deploy.
+It exports with `--clear` so a changed `EXPO_PUBLIC_*` value can never be hidden by a
+cached transform.
 
 ### 2. The admin dashboard
 
