@@ -9,6 +9,13 @@ export const PLATFORM_DEFAULTS = {
   maxQuantityPerItem: 20,
   maxItemsPerOrder: 50,
   /**
+   * Orders one student may have in flight at once (`max_open_orders_per_student`).
+   * Sign-up is open and cash needs no card, so without a ceiling one account could
+   * fill a counter's board with orders nobody will collect. Counts the last 12 hours
+   * only, so orders a canteen never answered cannot lock a student out for good.
+   */
+  maxOpenOrdersPerStudent: 5,
+  /**
    * Our only revenue: a slice of the delivery fee. The canteen keeps 100% of the
    * food subtotal and the rest of the delivery fee (₹8), out of which it pays its
    * own delivery staff. Deliberately small — canteens need to profit first.

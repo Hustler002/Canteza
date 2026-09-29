@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { formatPaise, paiseToRupees, type Row } from '@canteza/shared';
+import { formatPaise, paiseToRupees, TEXT_LIMITS, type Row } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
 import type { SearchParams } from '@/lib/order-filters';
 import { createMenuItem, setMenuItemActive, updateMenuItem } from './actions';
@@ -197,6 +197,7 @@ function MenuFields({ item, categories }: { item: MenuItem | null; categories: C
           id={fieldId('description', item)}
           name="description"
           defaultValue={item?.description ?? ''}
+          maxLength={TEXT_LIMITS.description}
         />
       </div>
 
@@ -206,7 +207,10 @@ function MenuFields({ item, categories }: { item: MenuItem | null; categories: C
           <input
             id={fieldId('image', item)}
             name="image_url"
+            type="url"
+            placeholder="https://"
             defaultValue={item?.image_url ?? ''}
+            maxLength={TEXT_LIMITS.url}
           />
         </div>
         <div className="field">

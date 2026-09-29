@@ -8,6 +8,7 @@ import {
   formatPaise,
   normaliseCouponCode,
   PLATFORM_DEFAULTS,
+  TEXT_LIMITS,
   toAppError,
   type PaymentMethod,
 } from '@canteza/shared';
@@ -276,12 +277,14 @@ export default function Checkout() {
           onChangeText={setRoom}
           placeholder="214"
           autoCapitalize="characters"
+          maxLength={TEXT_LIMITS.room}
         />
         <Field
           label="Delivery note (optional)"
           value={note}
           onChangeText={setNote}
           placeholder="Less spicy, call when you reach"
+          maxLength={TEXT_LIMITS.deliveryNote}
         />
 
         <CheckRow
@@ -300,6 +303,7 @@ export default function Checkout() {
           placeholder="WELCOME50"
           autoCapitalize="characters"
           autoCorrect={false}
+          maxLength={TEXT_LIMITS.couponCode}
         />
         {/*
          * The discount is not shown in the summary below on purpose. `place_order`

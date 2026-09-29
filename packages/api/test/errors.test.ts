@@ -31,6 +31,9 @@ describe('mapSupabaseError', () => {
     );
     expect(mapSupabaseError({ message: 'User already registered' }).code).toBe('EMAIL_IN_USE');
     expect(mapSupabaseError({ message: 'Email not confirmed' }).code).toBe('EMAIL_NOT_CONFIRMED');
+    expect(mapSupabaseError({ message: 'User is banned', status: 400 }).code).toBe(
+      'ACCOUNT_SUSPENDED',
+    );
   });
 
   it('does not reveal whether an email exists when the password is wrong', () => {

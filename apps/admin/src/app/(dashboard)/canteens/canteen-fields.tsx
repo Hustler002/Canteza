@@ -1,4 +1,4 @@
-import { paiseToRupees, type Row } from '@canteza/shared';
+import { paiseToRupees, TEXT_LIMITS, type Row } from '@canteza/shared';
 
 /**
  * The fields shared by creating and editing a canteen.
@@ -26,7 +26,12 @@ export function CanteenFields({ canteen }: { canteen: Row<'canteens'> | null }) 
 
       <div className="field">
         <label htmlFor="description">Description</label>
-        <input id="description" name="description" defaultValue={canteen?.description ?? ''} />
+        <input
+          id="description"
+          name="description"
+          defaultValue={canteen?.description ?? ''}
+          maxLength={TEXT_LIMITS.description}
+        />
       </div>
 
       <div className="row">
@@ -71,11 +76,23 @@ export function CanteenFields({ canteen }: { canteen: Row<'canteens'> | null }) 
       <div className="row">
         <div className="field">
           <label htmlFor="phone">Phone</label>
-          <input id="phone" name="phone" defaultValue={canteen?.phone ?? ''} />
+          <input
+            id="phone"
+            name="phone"
+            defaultValue={canteen?.phone ?? ''}
+            maxLength={TEXT_LIMITS.phone}
+          />
         </div>
         <div className="field">
           <label htmlFor="image_url">Image URL</label>
-          <input id="image_url" name="image_url" defaultValue={canteen?.image_url ?? ''} />
+          <input
+            id="image_url"
+            name="image_url"
+            type="url"
+            placeholder="https://"
+            defaultValue={canteen?.image_url ?? ''}
+            maxLength={TEXT_LIMITS.url}
+          />
         </div>
       </div>
 

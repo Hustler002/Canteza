@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { BRAND, formatCampusDateTime, toAppError } from '@canteza/shared';
+import { BRAND, formatCampusDateTime, TEXT_LIMITS, toAppError } from '@canteza/shared';
 import { useCreateTicket, useMyTickets } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
 import {
@@ -86,6 +86,7 @@ export default function Support() {
           value={subject}
           onChangeText={setSubject}
           placeholder="Order arrived cold"
+          maxLength={TEXT_LIMITS.ticketSubject}
         />
         <Field
           label="Details"

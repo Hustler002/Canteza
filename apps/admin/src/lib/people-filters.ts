@@ -1,4 +1,4 @@
-import { isRole, type Role } from '@canteza/shared';
+import { isRole, TEXT_LIMITS, type Role } from '@canteza/shared';
 import type { SearchParams } from './order-filters';
 
 /**
@@ -49,12 +49,13 @@ export function hasPeopleFilters(filters: PeopleFilters): boolean {
  *
  * Stored as `text[]`, so the form has to round-trip through something a person can type.
  * Empties are dropped rather than stored, because a trailing comma is a typo and a `''`
- * block would show up in checkout as a nameless choice.
+ * block would show up in checkout as a nameless choice. A block is cut to the length an
+ * order may store (`TEXT_LIMITS.block`), or every order to it would be refused.
  */
 export function parseBlocks(input: string): string[] {
   const seen = new Set<string>();
   for (const part of input.split(',')) {
-    const block = part.trim();
+    const block = part.trim().slice(0, TEXT_LIMITS.block);
     if (block) seen.add(block);
   }
   return [...seen];

@@ -1,4 +1,4 @@
-import { rupeesToPaise } from '@canteza/shared';
+import { isHttpsUrl, rupeesToPaise, TEXT_LIMITS } from '@canteza/shared';
 
 /**
  * The canteen edit form, turned into the arguments `admin_update_canteen` takes.
@@ -38,7 +38,20 @@ function optional(form: FormData, key: string): string | null {
 export function parseCanteenForm(form: FormData): ParseResult {
   const name = text(form, 'name');
   if (!name) return { ok: false, error: 'A canteen needs a name.' };
-  if (name.length > 80) return { ok: false, error: 'That name is too long.' };
+  if (name.length > TEXT_LIMITS.canteenName) return { ok: false, error: 'That name is too long.' };
+
+  const description = text(form, 'description');
+  if (description.length > TEXT_LIMITS.description) {
+    return { ok: false, error: 'That description is too long.' };
+  }
+  const phone = optional(form, 'phone');
+  if (phone !== null && phone.length > TEXT_LIMITS.phone) {
+    return { ok: false, error: 'That phone number is too long.' };
+  }
+  const imageUrl = optional(form, 'image_url');
+  if (imageUrl !== null && !isHttpsUrl(imageUrl)) {
+    return { ok: false, error: 'A photo link must start with https://.' };
+  }
 
   const opensAt = text(form, 'opens_at');
   const closesAt = text(form, 'closes_at');
@@ -62,9 +75,9 @@ export function parseCanteenForm(form: FormData): ParseResult {
     ok: true,
     values: {
       name,
-      description: text(form, 'description'),
-      phone: optional(form, 'phone'),
-      imageUrl: optional(form, 'image_url'),
+      description,
+      phone,
+      imageUrl,
       minOrderPaise,
       opensAt,
       closesAt,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 import { signIn, signUp, validatePassword } from '@canteza/api';
-import { toAppError } from '@canteza/shared';
+import { TEXT_LIMITS, toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
 import { AuthShell } from '../../src/components/auth-shell';
 import { Button, Field, FormError } from '../../src/components/ui';
@@ -64,6 +64,7 @@ export default function SignUp() {
         onChangeText={setFullName}
         autoComplete="name"
         placeholder="Riya Sharma"
+        maxLength={TEXT_LIMITS.fullName}
       />
       <Field
         label="Email"

@@ -23,7 +23,15 @@ const AUTH_SHIM = `
   create table auth.users (
     id                 uuid primary key default gen_random_uuid(),
     email              text unique,
-    raw_user_meta_data jsonb not null default '{}'
+    raw_user_meta_data jsonb not null default '{}',
+    banned_until       timestamptz
+  );
+
+  -- Suspending an account ends its sessions (security_hardening). On Supabase the
+  -- refresh tokens reference this table and cascade with it.
+  create table auth.sessions (
+    id      uuid primary key default gen_random_uuid(),
+    user_id uuid not null references auth.users (id) on delete cascade
   );
 
   -- Supabase reads the subject claim of the verified JWT. In tests the claim is
@@ -139,6 +147,11 @@ export async function seedCampus(db: Db): Promise<Campus> {
   await db.asOwner();
   await db.exec(readFileSync(SEED, 'utf8'));
   await db.exec(`update public.canteens set opens_at = '00:00', closes_at = '00:00';`);
+  // Suites place dozens of orders for one student to exercise other rules. The ceiling on
+  // open orders is security-hardening.test.ts's subject, and it removes this row.
+  await db.exec(
+    `insert into public.platform_settings (key, value) values ('max_open_orders_per_student', '1000');`,
+  );
 
   const mainCanteen = 'c0000000-0000-4000-8000-000000000001';
   const hostelCanteen = 'c0000000-0000-4000-8000-000000000002';

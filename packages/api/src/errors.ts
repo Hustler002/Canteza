@@ -13,6 +13,8 @@ import { AppError, ERROR_CODES, toAppError, type ErrorCode } from '@canteza/shar
 const AUTH_MESSAGES: Array<[RegExp, ErrorCode]> = [
   [/invalid login credentials/i, ERROR_CODES.INVALID_CREDENTIALS],
   [/email not confirmed/i, ERROR_CODES.EMAIL_NOT_CONFIRMED],
+  // An admin suspended the account, which also bans it at Auth (security_hardening).
+  [/user is banned/i, ERROR_CODES.ACCOUNT_SUSPENDED],
   [/already registered|already been registered|user already exists/i, ERROR_CODES.EMAIL_IN_USE],
   [/password should be|password is too short|weak password/i, ERROR_CODES.WEAK_PASSWORD],
   [/rate limit|too many requests/i, ERROR_CODES.RATE_LIMITED],

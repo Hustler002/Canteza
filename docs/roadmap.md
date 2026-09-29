@@ -358,3 +358,12 @@ up to the sign-in screen; signed-in flows there still need a person. The admin d
 is live too, at https://canteza-admin.vercel.app, once it declared its own `typescript`
 and `@types/node` (Vercel installs the workspace alone). The same day CI went green again: it had failed on Node 20 since
 2026-09-26 because supabase-js 2.116 needs Node 22's WebSocket; the floor is now 22.
+
+**Pre-launch security pass, 2026-09-29.** Every role was attacked on the live project
+with real sign-ins; 83 attempts were refused and four holes were not — suspended canteen
+staff kept working, a student could forge a resolved complaint, free text had no length
+limit (and picture links no scheme check), and nothing capped open orders per student.
+All four are fixed in `20260929120000_security_hardening.sql` with tests, alongside the
+advisor's findings, security headers on the admin dashboard and a CSP on the web app
+(proven in a browser with realtime and Razorpay Checkout). Details in `CLAUDE.md`.
+**The migration is written and tested but not yet pushed to the live project.**

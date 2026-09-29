@@ -10,6 +10,7 @@ export const ERROR_CODES = {
   EMAIL_NOT_CONFIRMED: 'EMAIL_NOT_CONFIRMED',
   RATE_LIMITED: 'RATE_LIMITED',
   FORBIDDEN: 'FORBIDDEN',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
   NOT_FOUND: 'NOT_FOUND',
   INVALID_TRANSITION: 'INVALID_TRANSITION',
   CANTEEN_CLOSED: 'CANTEEN_CLOSED',
@@ -23,6 +24,7 @@ export const ERROR_CODES = {
   ALREADY_DELIVERY_PARTNER: 'ALREADY_DELIVERY_PARTNER',
   ALREADY_CANTEEN_STAFF: 'ALREADY_CANTEEN_STAFF',
   OFF_SHIFT: 'OFF_SHIFT',
+  TOO_MANY_OPEN_ORDERS: 'TOO_MANY_OPEN_ORDERS',
   DUPLICATE_REQUEST: 'DUPLICATE_REQUEST',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   PAYMENT_UNVERIFIED: 'PAYMENT_UNVERIFIED',
@@ -43,6 +45,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   EMAIL_NOT_CONFIRMED: 'Check your email and confirm your address first.',
   RATE_LIMITED: 'Too many attempts. Wait a minute and try again.',
   FORBIDDEN: "You don't have access to this.",
+  ACCOUNT_SUSPENDED:
+    'This account has been suspended. Contact support if you think this is a mistake.',
   NOT_FOUND: "We couldn't find that.",
   INVALID_TRANSITION: 'This order has already moved on. Refresh to see the latest status.',
   CANTEEN_CLOSED: 'This canteen is closed right now.',
@@ -58,6 +62,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   ALREADY_CANTEEN_STAFF:
     'That person works a counter. Detach them from it before putting them on deliveries.',
   OFF_SHIFT: 'Go online to take deliveries.',
+  TOO_MANY_OPEN_ORDERS:
+    'You already have several orders on the way. Wait for one to arrive before placing another.',
   DUPLICATE_REQUEST: 'That was already submitted.',
   PAYMENT_FAILED: 'Payment did not go through. You have not been charged.',
   PAYMENT_UNVERIFIED: "We're still confirming your payment. This usually takes a few seconds.",

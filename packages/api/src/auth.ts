@@ -88,7 +88,7 @@ export async function getIdentity(client: CampusClient): Promise<Identity | null
   // the account is mid-creation. Either way there is no identity to act as.
   if (!profile) return null;
   if (!profile.is_active) {
-    throw new AppError(ERROR_CODES.FORBIDDEN, { reason: 'account_disabled' });
+    throw new AppError(ERROR_CODES.ACCOUNT_SUSPENDED);
   }
   if (!isRole(profile.role)) {
     throw new AppError(ERROR_CODES.UNKNOWN, { reason: 'unknown_role', role: profile.role });

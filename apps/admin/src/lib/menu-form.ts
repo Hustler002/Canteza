@@ -1,4 +1,4 @@
-import { parsePriceRupees } from '@canteza/shared';
+import { isHttpsUrl, parsePriceRupees, TEXT_LIMITS } from '@canteza/shared';
 
 /**
  * The menu item form, turned into a `menu_items` row.
@@ -36,7 +36,16 @@ function optional(form: FormData, key: string): string | null {
 export function parseMenuForm(form: FormData): ParseResult {
   const name = text(form, 'name');
   if (!name) return { ok: false, error: 'An item needs a name.' };
-  if (name.length > 80) return { ok: false, error: 'That name is too long.' };
+  if (name.length > TEXT_LIMITS.menuItemName) return { ok: false, error: 'That name is too long.' };
+
+  const description = text(form, 'description');
+  if (description.length > TEXT_LIMITS.description) {
+    return { ok: false, error: 'That description is too long.' };
+  }
+  const imageUrl = optional(form, 'image_url');
+  if (imageUrl !== null && !isHttpsUrl(imageUrl)) {
+    return { ok: false, error: 'A photo link must start with https://.' };
+  }
 
   const rupees = text(form, 'price_rupees');
   if (rupees === '') return { ok: false, error: 'An item needs a price.' };
@@ -58,10 +67,10 @@ export function parseMenuForm(form: FormData): ParseResult {
     ok: true,
     values: {
       name,
-      description: text(form, 'description'),
+      description,
       pricePaise,
       categoryId: optional(form, 'category_id'),
-      imageUrl: optional(form, 'image_url'),
+      imageUrl,
       isVeg: form.get('is_veg') !== null,
       // An unchecked checkbox is absent from FormData entirely, so both of these read
       // as false on a form that never rendered them.

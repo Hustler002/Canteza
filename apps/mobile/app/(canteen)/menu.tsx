@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isAwaitingOnboarding, type MenuItem } from '@canteza/api';
-import { formatPaise, paiseToRupees, parsePriceRupees, toAppError } from '@canteza/shared';
+import {
+  formatPaise,
+  isHttpsUrl,
+  paiseToRupees,
+  parsePriceRupees,
+  TEXT_LIMITS,
+  toAppError,
+} from '@canteza/shared';
 import { useCanteenMenu, useCreateMenuItem, useUpdateMenuItem } from '../../src/lib/queries';
 import { useIdentity } from '../../src/lib/session';
 import {
@@ -145,6 +152,10 @@ function MenuRow({ item }: { item: MenuItem }) {
     // An empty box means "no picture", which is null in the column rather than an
     // empty string -- `Thumb` tests for a URL, and '' is not one.
     const trimmedUrl = imageUrl.trim();
+    if (trimmedUrl !== '' && !isHttpsUrl(trimmedUrl)) {
+      setError('A photo link has to start with https://.');
+      return;
+    }
     patch({
       name: name.trim(),
       price_paise: pricePaise,
@@ -194,7 +205,12 @@ function MenuRow({ item }: { item: MenuItem }) {
 
       {open ? (
         <View style={{ gap: t.space.md }}>
-          <Field label="Name" value={name} onChangeText={setName} maxLength={80} />
+          <Field
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            maxLength={TEXT_LIMITS.menuItemName}
+          />
           <Field
             label="Price (₹)"
             value={price}
@@ -212,6 +228,7 @@ function MenuRow({ item }: { item: MenuItem }) {
             value={imageUrl}
             onChangeText={setImageUrl}
             placeholder="https://…"
+            maxLength={TEXT_LIMITS.url}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -286,7 +303,12 @@ function NewItemCard({ canteenId }: { canteenId: string }) {
         title="Add a dish"
         subtitle="A name and a price is all it takes"
       />
-      <Field label="Name" value={name} onChangeText={setName} maxLength={80} />
+      <Field
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        maxLength={TEXT_LIMITS.menuItemName}
+      />
       <Field label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="number-pad" />
       <FormError message={error} />
       <Button icon="add" label="Add to the menu" loading={create.isPending} onPress={add} />

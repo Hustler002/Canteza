@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 8 in progress.** 456 tests green offline, plus 97 live checks
+**Phase 8 in progress.** 519 tests green offline, plus 97 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history, engagement, canteen stats, the notification inbox, the
 payment infrastructure and the online checkout. **The inbox is done. Razorpay works end
@@ -39,6 +39,59 @@ web app (https://canteza-mobile.vercel.app) and the admin dashboard
 > `auth.admin.updateUserById(id, { ban_duration: 'none', password })`); every session was
 > revoked. No other secret has ever been committed — checked across all of git history.
 > **Rule: no credential is ever a literal in this repo, not even a demo one.**
+
+> **Pre-launch security pass, 2026-09-29.** The live project was attacked with real
+> sign-ins for every role and with no session at all (anon key only) — a scratch script,
+> one attack per line, never printing a token. **83 attacks were refused**: no anonymous
+> read of any table or RPC, no cross-student read of orders, items, payments, history,
+> notifications, tickets or push tokens, no self-promotion, no payment or order write by
+> any client (admins included), no cross-canteen read or write, no partner self-approval,
+> no admin self-demotion. The Edge Functions were read and hold up (owner check in
+> `create-payment`, HMAC before parsing in `verify-payment`, constant-time secret in
+> `send-push`). **Four real holes, fixed in `..._security_hardening.sql`:**
+>
+> 1. **Suspension did not stop canteen staff.** `my_canteen_id()` ignored
+>    `profiles.is_active`, so a suspended counter worker still read the canteen's orders
+>    (names, phones, rooms) and edited its menu — proven live on `juice.corner`, restored
+>    at once. Now it joins profiles like `my_delivery_canteen_id()` always did; a trigger
+>    on `orders` refuses **any** write by a suspended user (`ACCOUNT_SUSPENDED`), whatever
+>    function makes it; and `admin_set_profile_active` also **bans the account at Auth**
+>    (`banned_until` +100 years, which is what GoTrue's own `876000h` writes — not
+>    `'infinity'`, which Go cannot read) and deletes its sessions. Sign-in then answers
+>    "User is banned", mapped to `ACCOUNT_SUSPENDED`.
+> 2. **A student could forge a complaint** — insert a ticket already `resolved`, with a
+>    `resolution` in the admin's voice, pinned to someone else's order. INSERT is now a
+>    column grant (`student_id, order_id, subject, body`), the policy requires the order
+>    to be the student's own, and the admin's UPDATE is narrowed to `status, resolution`.
+>    Reviews got the same column grant.
+> 3. **No free text had a length limit** (a 200 KB name was stored) and **picture links
+>    took any scheme** (`javascript:` was stored). CHECK constraints now, mirrored in
+>    `TEXT_LIMITS` / `isHttpsUrl` (`packages/shared/src/limits.ts`) for every form;
+>    `supabase/test/limits.test.ts` fails if the two disagree.
+> 4. **No ceiling on open orders.** Sign-up is open and cash needs no card, so one account
+>    could fill a counter's board. At most 5 open orders **placed in the last 12 hours**
+>    (`max_open_orders_per_student`) — the window because nothing sweeps a cash order a
+>    canteen never answered, and without it five of those would lock a student out for
+>    good. riya has 18 such stale test orders on the live project; the window is why that
+>    does not break `verify:live`.
+>
+> Plus the advisor's findings (search_path on four functions, helpers off `anon`, the
+> signup trigger off the RPC surface, `canteens_public` → `security_invoker`), the
+> admin's missing headers (clickjacking: `frame-ancestors 'none'`, `X-Frame-Options`,
+> `nosniff`, no `X-Powered-By`), and a **CSP on the web app** (`vercel.json`), proven in a
+> browser against the production build: no violations on sign-in, Home with live data,
+> the realtime websocket, or Razorpay Checkout opening its frame. Razorpay also loads a
+> fraud-check script from `cdn.razorpay.com`, which the first draft blocked. **A new
+> third-party script, font or API host must be added to that CSP or it will not load.**
+>
+> **Status: written and tested (PGlite, 13 of the 15 new tests fail without the migration),
+> not yet on the live project** — `npm run db:push`, then rerun the attack script and
+> `verify:live`. The auto-mode classifier refused the push from a Claude session.
+>
+> **Deliberately left as is:** `reviews_read` is `true` (a review carries a pseudonymous
+> `student_id`; profiles are not readable); every active coupon code is listable by any
+> signed-in user (the checkout offers them — a code meant to stay private needs a
+> different design); `canteen_stats` stays a definer view (see its section).
 
 ```
 ✅ Phase 0  assessment, architecture, ADRs
@@ -755,6 +808,13 @@ Departures from the original brief, all argued in the ADRs:
   from `notifications.ts` so in-app and push cannot drift.
 
 ## Known gaps
+
+- **Auth settings only the dashboard can change** (not readable from here): the server's
+  minimum password length (the app asks for 8 with a letter and a digit, but a direct API
+  sign-up gets GoTrue's own floor, 6 by default), leaked-password protection (the advisor
+  reports it off), CAPTCHA on sign-up (sign-up is open to any email, unverified), and the
+  Realtime "private channels only" switch (the app uses no broadcast channels, so anyone
+  holding the public key can broadcast on one — harmless to the data, noise at worst).
 
 - **An account that has ordered cannot be deleted, on purpose.** `orders.student_id`,
   `orders.delivery_partner_id` and `order_status_history.actor_id` reference `profiles`
