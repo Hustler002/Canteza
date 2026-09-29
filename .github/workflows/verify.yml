@@ -23,7 +23,9 @@ jobs:
         with:
           # The floor in package.json's engines. Passing here means the repo builds on
           # what it claims to support, not only on whatever the last machine had.
-          node-version: 20
+          # 22, not 20: supabase-js 2.116 needs Node's native WebSocket to create a
+          # client at all, and CI was red on 20 from 2026-09-26 until this changed.
+          node-version: 22
           cache: npm
 
       # `npm ci`, not `npm install`: it installs exactly the lockfile and fails if

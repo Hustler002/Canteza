@@ -16,8 +16,9 @@ to end in test mode on a real Android phone** — card and wallet payments throu
 native sheet, confirmed by the deployed webhook, and a declined card recorded with
 Razorpay's reason. **UPI is not offered, and that is the Razorpay account, not the app**:
 `GET /v1/methods` for the deployed key reports `upi: false`. Push works end to end on the
-phone (foreground, background, cold-start taps, account switching, refusal); Sentry and
-deploy are still to do.
+phone (foreground, background, cold-start taps, account switching, refusal). The student
+web app is deployed (https://canteza-mobile.vercel.app); the admin deploy and Sentry are
+still to do.
 
 > **Commits are yours.** Never run `git commit` here — finish the work, run
 > `npm run verify`, and hand it over.
@@ -182,14 +183,14 @@ npm run db:push        # deploy migrations to the linked project
 blocked on things only an account holder can supply, and it is worth knowing which,
 because the order is forced rather than chosen:
 
-| Track        | State          | Blocked on                                                                                                                                       |
-| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| In-app inbox | ✅ done        | —                                                                                                                                                |
-| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                         |
-| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                |
-| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                           |
-| EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Web app built and checked in a browser; not deployed** — needs a Vercel account (`apps/mobile/WEB.md`) |
-| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                   |
+| Track        | State          | Blocked on                                                                                                                                                                                                |
+| ------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-app inbox | ✅ done        | —                                                                                                                                                                                                         |
+| Expo push    | 🔶 server live | Server side deployed and proven live (webhook → `send-push`, 200s). Push build submitted 2026-09-27; device test pending                                                                                  |
+| Razorpay     | 🔶 test mode   | **Works end to end on a real phone in test mode.** UPI is disabled on the Razorpay account (`upi: false`); live keys not yet used                                                                         |
+| Sentry       | 🔶 written     | Code in and off until a DSN is set; needs a Sentry project and one more EAS build — see "Sentry" below                                                                                                    |
+| EAS / Vercel | 🔶 EAS done    | Android dev build runs on a real phone. **Student web app live** at https://canteza-mobile.vercel.app (Vercel project `canteza-mobile`); admin dashboard not yet created on Vercel (`apps/mobile/WEB.md`) |
+| CI           | ✅ done        | `.github/workflows/verify.yml` has run the suite since Phase 6                                                                                                                                            |
 
 **That fork has been taken:** push, Sentry and the Razorpay sheet all needed a
 development build rather than Expo Go, and one now exists (`apps/mobile/EAS.md`). It is
@@ -549,7 +550,13 @@ All three are gitignored, so a fresh clone has none of them. `next dev` printing
 Both npm scripts that need the root file pass node's `--env-file=.env`, so it is read
 automatically; a variable already exported in the shell still wins over the file. It is
 `--env-file`, not `--env-file-if-exists`, because that flag arrived in Node **v22.9.0**
-and `engines` here is `>=20` — CI runs 20 and would break on it.
+and `engines` here is `>=22`, which admits 22.0–22.8.
+
+**Node 22 is the floor, not 20** (raised 2026-09-29). supabase-js 2.116 throws "Node.js
+detected but native WebSocket not found" when a client is created on Node 20, so
+`auth.test.ts` failed there and **CI was red from 2026-09-26 (`f876789`) until then** —
+every run, unnoticed, while the local machine on Node 24 stayed green. The whole suite
+passes on 22.
 
 **`EXPO_PUBLIC_*` must be written out in full, never `process.env[name]`.** Expo
 inlines them with a Babel transform that rewrites the literal text

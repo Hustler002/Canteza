@@ -348,3 +348,12 @@ inbox does — from a generated copy of `packages/shared/src/notifications.ts` t
 holds identical — and sends it to the recipient's devices in `push_tokens`. A device
 belongs to whoever signed in on it last. It needs Firebase config compiled into the app,
 so, contrary to an earlier note, push does cost one more EAS build.
+
+**Web first, 2026-09-29.** The same `apps/mobile` code now runs in a browser
+(`react-native-web`) and the student app is live on Vercel at
+https://canteza-mobile.vercel.app, built from `main` on every push. Web-specific pieces
+are `.web.ts` files beside their phone versions — session storage, dialogs, Razorpay
+Standard Checkout — and push is off on the web. The deployed bundle was run in a browser
+up to the sign-in screen; signed-in flows there still need a person. The admin dashboard
+is not on Vercel yet. The same day CI went green again: it had failed on Node 20 since
+2026-09-26 because supabase-js 2.116 needs Node 22's WebSocket; the floor is now 22.
