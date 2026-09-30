@@ -366,4 +366,5 @@ limit (and picture links no scheme check), and nothing capped open orders per st
 All four are fixed in `20260929120000_security_hardening.sql` with tests, alongside the
 advisor's findings, security headers on the admin dashboard and a CSP on the web app
 (proven in a browser with realtime and Razorpay Checkout). Details in `CLAUDE.md`.
-**The migration is written and tested but not yet pushed to the live project.**
+**Pushed to the live project on 2026-09-30, after a backup and a tested rollback: `verify:live`
+97/97 and the attack script found no remaining hole, suspension included.**

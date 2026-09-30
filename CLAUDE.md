@@ -84,9 +84,25 @@ web app (https://canteza-mobile.vercel.app) and the admin dashboard
 > fraud-check script from `cdn.razorpay.com`, which the first draft blocked. **A new
 > third-party script, font or API host must be added to that CSP or it will not load.**
 >
-> **Status: written and tested (PGlite, 13 of the 15 new tests fail without the migration),
-> not yet on the live project** — `npm run db:push`, then rerun the attack script and
-> `verify:live`. The auto-mode classifier refused the push from a Claude session.
+> **Live since 2026-09-30** (`db push`, approved by the owner; 20 migrations applied).
+> Before pushing: every live row was checked against the new constraints (0 of 1,074
+> violated them), a JSON export of all 21 tables and a snapshot of every function, policy,
+> grant, constraint, trigger and view were taken (the Free plan has no restorable
+> backups), and a rollback script built from that snapshot was proven in PGlite to return
+> the schema exactly to its prior state. Kept outside the repo, because the export holds
+> personal data. A per-table md5 fingerprint before and after the push was identical
+> in all 20 tables: the migration touched no row. **After:** `verify:live` 97/97; the
+> attack script **94 refused, 0 real holes** (its one "VULN" line is the counter seeing the
+> students on its live orders, which is the design — checked: 4 profiles visible, all 4
+> entitled). **Suspension proven live through the admin path** on `juice.corner`: sign-in
+> answered "User is banned", its refresh token was gone, and the still-unexpired access
+> token resolved no canteen, read 0 orders, edited nothing, and `transition_order`
+> refused it; restored at once, it signed in and saw its canteen's orders again.
+> **Sign-up still works with `handle_new_user` off the RPC surface**: a person signed up
+> from the web at 11:31:43 UTC and got an active `student` profile with its name in the
+> same millisecond, confirmed and signed in 0.8 s later. The
+> advisor now reports only `canteen_stats` (by design), the RPCs signed-in users are meant
+> to call, and leaked-password protection.
 >
 > **Deliberately left as is:** `reviews_read` is `true` (a review carries a pseudonymous
 > `student_id`; profiles are not readable); every active coupon code is listable by any
@@ -809,12 +825,19 @@ Departures from the original brief, all argued in the ADRs:
 
 ## Known gaps
 
-- **Auth settings only the dashboard can change** (not readable from here): the server's
-  minimum password length (the app asks for 8 with a letter and a digit, but a direct API
-  sign-up gets GoTrue's own floor, 6 by default), leaked-password protection (the advisor
-  reports it off), CAPTCHA on sign-up (sign-up is open to any email, unverified), and the
-  Realtime "private channels only" switch (the app uses no broadcast channels, so anyone
-  holding the public key can broadcast on one — harmless to the data, noise at worst).
+- **Auth settings only the dashboard can change** (no tool here reads or writes them):
+  - **Minimum password length / required characters** — set 8 and "letters and digits"
+    to match `validatePassword`; a direct API sign-up otherwise gets GoTrue's floor of 6.
+    Per Supabase's docs, an existing user whose password falls short can still sign in.
+  - **Leaked-password protection** — the advisor reports it off, and Supabase's docs say
+    it is a **Pro-plan feature**, so it cannot be switched on while the org is on Free.
+  - **CAPTCHA** — **do not switch it on from the dashboard alone.** Once on, GoTrue
+    refuses every sign-in and sign-up that carries no `captchaToken`, and nothing in this
+    repo sends one: the web app, the phone app, the admin and `verify:live` would all be
+    locked out. It needs a Turnstile/hCaptcha widget wired into `signIn`/`signUp` first
+    (and a WebView answer on the phone), then the toggle.
+  - **Realtime "private channels only"** — the app uses no broadcast channels, so anyone
+    holding the public key can broadcast on one; harmless to the data, noise at worst.
 
 - **An account that has ordered cannot be deleted, on purpose.** `orders.student_id`,
   `orders.delivery_partner_id` and `order_status_history.actor_id` reference `profiles`
