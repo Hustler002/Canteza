@@ -150,6 +150,8 @@ Authentication → Users → **Add user → Create new user**, or on the admin A
 partner there, with "Auto Confirm User" ticked, then attach them in the admin dashboard.
 **"Send invitation" will not work** for a non-college address: the hook refuses it.
 
+**Step 2 done on 2026-09-30** (the migration is live and was checked on the database).
+
 **Existing accounts keep working.** Sign-in is not restricted, so the `@campus.edu` demo
 accounts and anyone who signed up before this can still sign in.
 

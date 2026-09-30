@@ -3,33 +3,33 @@
 :root {
   --primary: #e8590c;
   --on-primary: #ffffff;
-  --primary-soft: #fff4e6;
-  --background: #fffdfb;
+  --primary-soft: #fff3e8;
+  --background: #f6f4f1;
   --surface: #ffffff;
-  --surface-alt: #efeae5;
-  --border: #d9d3cd;
-  --text: #16120e;
-  --text-muted: #6b625a;
-  --danger: #c92a2a;
-  --danger-soft: #ffe3e3;
-  --success: #2b8a3e;
+  --surface-alt: #efebe7;
+  --border: #e7e2dd;
+  --text: #1c1917;
+  --text-muted: #6b6560;
+  --danger: #d63031;
+  --danger-soft: #fdecec;
+  --success: #1f9d55;
   --radius: 12px;
   --radius-lg: 16px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --primary: #f76707;
-    --primary-soft: #2a2724;
-    --background: #12100e;
-    --surface: #1c1917;
-    --surface-alt: #2a2724;
-    --border: #3d3936;
-    --text: #e8e4e0;
-    --text-muted: #8e8781;
-    --danger: #ff6b6b;
-    --danger-soft: #2a2724;
-    --success: #51cf66;
+    --primary: #ff7a2e;
+    --primary-soft: #2b1a10;
+    --background: #0f0d0c;
+    --surface: #181514;
+    --surface-alt: #221e1c;
+    --border: #3b3532;
+    --text: #f5f2ef;
+    --text-muted: #a39d97;
+    --danger: #f87171;
+    --danger-soft: #2a1414;
+    --success: #4ade80;
   }
 }
 
@@ -65,6 +65,15 @@ h2 {
 h3 {
   font-size: 17px;
   margin: 0;
+}
+
+/* A plain link in running text -- the overview's "Where to go", for one. Without this it
+   was the browser's own blue (purple once visited), unreadable on the dark card. The
+   classed links (.nav, .table, .button, .muted) set their own colours and win on
+   specificity. */
+a {
+  color: var(--primary);
+  text-underline-offset: 2px;
 }
 
 .muted {
@@ -383,23 +392,25 @@ h3 {
   line-height: 1;
   color: var(--text);
 }
+/* The same tokens as the page, as in the app's logo.tsx: the saffron tile with a white
+   glyph in light; in dark the tile is --surface-alt and the glyph the brighter --primary. */
 .logo-tile {
-  fill: #e8590c;
+  fill: var(--primary);
 }
 .logo-glyph {
-  stroke: #ffffff;
+  stroke: var(--on-primary);
 }
 .logo-dot {
-  fill: #ffffff;
+  fill: var(--on-primary);
 }
 @media (prefers-color-scheme: dark) {
   .logo-tile {
-    fill: #221e1c;
+    fill: var(--surface-alt);
   }
   .logo-glyph {
-    stroke: #ff7a2e;
+    stroke: var(--primary);
   }
   .logo-dot {
-    fill: #ff7a2e;
+    fill: var(--primary);
   }
 }

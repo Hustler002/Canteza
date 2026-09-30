@@ -1075,6 +1075,12 @@ export type Database = {
       Args: Record<PropertyKey, never>;
       Returns: string;
     };
+    canteen_is_staffed: {
+      Args: {
+        p_canteen_id: string | null;
+      };
+      Returns: boolean;
+    };
     canteen_set_partner_active: {
       Args: {
         p_profile_id: string | null;

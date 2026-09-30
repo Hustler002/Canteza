@@ -15,6 +15,11 @@ import { setCanteenActive } from './actions';
  *
  * `canteens_public` only contains active canteens, which is exactly right: a disabled
  * canteen is never open.
+ *
+ * The view also knows whether anyone can work the counter (`canteen_is_staffed`): its
+ * `is_accepting_orders` is the pause switch AND that. A canteen the counter has not
+ * paused but the view reports as not accepting has nobody who can sign in to run it --
+ * shown here, because it looks switched on and takes no orders.
  */
 export default async function CanteensPage({
   searchParams,
@@ -32,10 +37,13 @@ export default async function CanteensPage({
       .from('canteens')
       .select('id, name, opens_at, closes_at, min_order_paise, is_accepting_orders, is_active')
       .order('name'),
-    supabase.from('canteens_public').select('id').eq('is_open', true),
+    supabase.from('canteens_public').select('id, is_open, is_accepting_orders'),
   ]);
 
-  const openNow = new Set((open.data ?? []).map((row) => row.id));
+  const openNow = new Set((open.data ?? []).filter((row) => row.is_open).map((row) => row.id));
+  const takingOrders = new Set(
+    (open.data ?? []).filter((row) => row.is_accepting_orders).map((row) => row.id),
+  );
   const canteens = all.data ?? [];
 
   return (
@@ -89,6 +97,13 @@ export default async function CanteensPage({
                         <span className="muted">—</span>
                       ) : !canteen.is_accepting_orders ? (
                         <span className="badge bad">paused</span>
+                      ) : !takingOrders.has(canteen.id) ? (
+                        <span
+                          className="badge bad"
+                          title="Nobody who can sign in works this counter, so students cannot order. Attach an active staff account."
+                        >
+                          no counter staff
+                        </span>
                       ) : openNow.has(canteen.id) ? (
                         <span className="badge ok">open</span>
                       ) : (

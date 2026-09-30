@@ -2,11 +2,13 @@ import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   BRAND,
+  ERROR_CODES,
   checkOrderPlacement,
   computeTotals,
   formatPaise,
   PLATFORM_DEFAULTS,
   toAppError,
+  type AppError,
   type CartLine,
   type MenuItemSnapshot,
 } from '@canteza/shared';
@@ -35,6 +37,24 @@ import {
   VegMark,
 } from '../../src/components/patterns';
 import { useTheme } from '../../src/theme';
+
+/**
+ * What stops the order, in words. The minimum is the one blocker the shared message
+ * cannot finish -- "you haven't reached the minimum" leaves the student guessing by how
+ * much -- and the rule already hands back both figures.
+ */
+function blockerMessage(blocker: AppError): string {
+  const min = blocker.details?.minOrderPaise;
+  const subtotal = blocker.details?.subtotalPaise;
+  if (
+    blocker.code === ERROR_CODES.BELOW_MINIMUM_ORDER &&
+    typeof min === 'number' &&
+    typeof subtotal === 'number'
+  ) {
+    return `Add ${formatPaise(min - subtotal)} more. This canteen's minimum order is ${formatPaise(min)}.`;
+  }
+  return blocker.userMessage;
+}
 
 /**
  * Cart review.
@@ -122,7 +142,7 @@ export default function CartScreen() {
       scroll
       footer={
         <>
-          <FormError message={blocker ? blocker.userMessage : null} />
+          <FormError message={blocker ? blockerMessage(blocker) : null} />
           {/*
            * The total lives on the button itself, so it is readable at the moment of
            * the decision rather than needing a scroll back up to check (§10).

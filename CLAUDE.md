@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 8 in progress.** 557 tests green offline, plus 97 live checks
+**Phase 8 in progress.** 565 tests green offline, plus 97 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history, engagement, canteen stats, the notification inbox, the
 payment infrastructure and the online checkout. **The inbox is done. Razorpay works end
@@ -109,6 +109,36 @@ web app (https://canteza-mobile.vercel.app) and the admin dashboard
 > signed-in user (the checkout offers them — a code meant to stay private needs a
 > different design); `canteen_stats` stays a definer view (see its section).
 
+> **Final pass, 2026-09-30.** `campus_email_signup` is **live** (`db push`, approved;
+> checked on the live database: a college address passes the hook, `+tag` and Gmail get
+> 403 `EMAIL_NOT_ALLOWED`, only `supabase_auth_admin` may call it, and the email-change
+> trigger refused a move to Gmail and allowed one to another college address -- run on a
+> throwaway row inside a transaction that always rolls back; users and profiles still 13).
+> `verify:live` 97/97; CI green; the attack script (now signing in by one-time link, like
+> `verify:live`, with four sign-up attacks added) **101 refused, 0 holes** -- its old
+> "VULN" line was a mislabelled check, now comparing what the counter sees against who is
+> on its live orders. **Found and fixed:**
+>
+> 1. **Canteens nobody can run took orders.** Hostel and Night Canteen's only counter
+>    accounts were banned at Auth on 2026-09-29 (profiles left active), yet both stayed
+>    open and held **12 orders, prepaid ones among them, that nobody could accept**.
+>    `..._unstaffed_canteen_closed.sql`: `canteen_is_staffed()` (active profile **and**
+>    not banned), ANDed into `canteens_public.is_accepting_orders`, and a trigger on
+>    `orders` refusing the insert (`CANTEEN_CLOSED`). The admin list flags such a canteen
+>    "no counter staff". **Written and tested (proven to fail without the migration), not
+>    yet pushed**: the second `db push` of the day was refused by the auto-mode
+>    classifier, so it is the owner's to run. The 12 stuck orders are left as they are.
+> 2. **The admin's colours had drifted from the app's** (the 2026-09-29 refresh never
+>    reached `globals.css`); synced, the logo now uses the tokens, and
+>    `apps/admin/test/theme-tokens.test.ts` fails when they drift (proven on the old CSS).
+>    Plain links had no colour at all (browser blue on the dark overview card).
+> 3. Home said "₹30 min" beside "25 min" (now "₹30 minimum"), and "Closed · opens 07:00"
+>    for a canteen within its hours but paused (now "Not taking orders right now"). The
+>    cart's minimum-order blocker now says how much more to add.
+>
+> **Left:** `expo-doctor` still reports patch mismatches for `expo`, `expo-constants` and
+> `expo-router` -- fixing them changes native modules and belongs with the next EAS build.
+
 ```
 ✅ Phase 0  assessment, architecture, ADRs
 ✅ Phase 1  monorepo, tooling, shared domain core + 33 tests
@@ -205,6 +235,7 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 | `..._push_tokens.sql`                  | One row per device; `register_push_token` moves it to whoever signs in        |
 | `..._prepaid_student_notification.sql` | Student's "Order placed" waits for the payment too, like the counter's        |
 | `..._campus_email_signup.sql`          | **Security.** Sign-up hook: college mailbox only; a college account stays one |
+| `..._unstaffed_canteen_closed.sql`     | A canteen with nobody able to sign in to its counter takes no orders          |
 | `seed.sql`                             | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings            |
 | `seed-users.mjs`                       | Accounts via the Auth API, then demo orders through the real RPCs             |
 | `functions/`                           | `create-payment`, `verify-payment`, `send-push` (Deno) + tested `_shared/`    |
@@ -629,8 +660,8 @@ saffron on stone. How it is built, so the next change is one edit:
   the admin's ADMIN badge. Screens further in keep their back button. On a 320px phone the
   tag wraps under the name rather than running under the buttons (measured).
 - **The admin draws it as inline SVG** (`apps/admin/src/app/logo.tsx`), the name in Plus
-  Jakarta Sans via `next/font` (self-hosted at build time), colours in `globals.css`.
-  Stacked on the sign-in page, horizontal in the dashboard header.
+  Jakarta Sans via `next/font` (self-hosted at build time), colours from the page's own
+  tokens in `globals.css`. Stacked on the sign-in page, horizontal in the dashboard header.
 - **Every icon file is rendered from `logoSvg()`** by `npm run brand:assets` (in
   `apps/mobile`), which also runs `web:icons`: the square app icon (the OS rounds it), the
   Android adaptive foreground/background/monochrome (glyph inside the safe two thirds;
@@ -935,10 +966,10 @@ Departures from the original brief, all argued in the ADRs:
   `orders` cascades), then the user. There is no "delete my account" flow for students
   yet; when one is needed, it should anonymise the profile rather than delete it.
 
-- **Student sign-up by college email, with a code (built 2026-09-30, not yet switched on).**
-  One mailbox, one account: a student signs up with an `@mnnit.ac.in` address and enters
-  the code emailed to it. **Until the dashboard steps in `apps/mobile/WEB.md` §6 are done,
-  "Confirm email" is still off** (`mailer_autoconfirm: true`, 2026-09-29) and nothing
+- **Student sign-up by college email, with a code (built 2026-09-30; migration live, the
+  dashboard switches not yet on).** One mailbox, one account: a student signs up with an
+  `@mnnit.ac.in` address and enters the code emailed to it. **Until the dashboard steps in
+  `apps/mobile/WEB.md` §6 are done, "Confirm email" is still off** (`mailer_autoconfirm: true`, 2026-09-29) and nothing
   server-side enforces the domain — only the form does. Off because Supabase's built-in
   sender delivers only to the project's team, so **custom SMTP comes first**. How it fits:
   - **The rule is `is_campus_email()`** (`campus_email_signup` migration), mirrored in

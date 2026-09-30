@@ -611,14 +611,24 @@ function CanteenCard({ canteen, stats }: { canteen: Canteen; stats?: CanteenStat
             <Rating average={stats?.avg_food_rating} count={stats?.review_count} />
             {eta !== null ? <Fact icon="time-outline" label={`${eta} min`} strong /> : null}
             {canteen.min_order_paise ? (
-              <Fact icon="wallet-outline" label={`${formatPaise(canteen.min_order_paise)} min`} />
+              // "minimum", not "min": beside the ETA's "25 min", "₹30 min" read as a time.
+              <Fact
+                icon="wallet-outline"
+                label={`${formatPaise(canteen.min_order_paise)} minimum`}
+              />
             ) : null}
           </View>
 
           <Badge
             dot
             label={
-              open ? `Open · ${hours}` : `Closed · opens ${canteen.opens_at?.slice(0, 5) ?? ''}`
+              open
+                ? `Open · ${hours}`
+                : canteen.is_open
+                  ? // Within its hours but paused, or nobody at the counter: "opens 07:00"
+                    // would be wrong at 13:00.
+                    'Not taking orders right now'
+                  : `Closed · opens ${canteen.opens_at?.slice(0, 5) ?? ''}`
             }
             tone={open ? 'success' : 'neutral'}
           />
