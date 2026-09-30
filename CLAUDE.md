@@ -831,7 +831,16 @@ Departures from the original brief, all argued in the ADRs:
     Per Supabase's docs, an existing user whose password falls short can still sign in.
   - **Leaked-password protection** — the advisor reports it off, and Supabase's docs say
     it is a **Pro-plan feature**, so it cannot be switched on while the org is on Free.
-  - **CAPTCHA** — **built (Cloudflare Turnstile), not yet switched on.** Once on, GoTrue
+  - **CAPTCHA** — **live since 2026-09-30 (Cloudflare Turnstile, commit `769621a`).**
+    Proven on production: a password sign-in with no token answers `captcha_failed` ("no
+    captcha_token found"), and one with Cloudflare's dummy test token is rejected by
+    Cloudflare ("invalid-input-response") — before any password is looked at.
+    `verify:live` passed 97/97 afterwards, through `signInPastCaptcha`. Both deployed
+    sign-in pages, relayed byte for byte through localhost with their own CSP (the browser
+    pane blocks remote scripts), rendered the widget with no console error; the admin's
+    submit stays disabled until it answers. The phone needs a new EAS build to sign in.
+    **The scratch attack script signs in with a password and would now need the same
+    link fallback.** Before this: Once on, GoTrue
     refuses every sign-in and sign-up without a valid token, so the rollout order in
     `apps/mobile/WEB.md` §5 is the whole safety: site key into the builds and deployed
     first, the Supabase switch last. How it is put together:

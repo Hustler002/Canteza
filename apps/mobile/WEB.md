@@ -108,7 +108,8 @@ covers a browser that blocks challenges.cloudflare.com.
 
 **Done on 2026-09-30:** the widget exists (site key `0x4AAAAAAFKJBycg8MVUWL8b`, public);
 the key is a Production variable on both Vercel projects, in all three `eas.json` profiles
-and in both local env files. Steps 3–4 remain.
+and in both local env files. **Steps 3–4 done the same day:** CAPTCHA protection is on
+in Supabase; a token-less sign-in answers `captcha_failed`; `verify:live` 97/97.
 
 ## Updating it
 
