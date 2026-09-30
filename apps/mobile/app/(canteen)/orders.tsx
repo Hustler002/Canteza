@@ -31,6 +31,7 @@ import {
 } from '../../src/components/ui';
 import { OrderLines, StatusPill } from '../../src/components/order';
 import { AppBar, Divider, Fact, IconButton } from '../../src/components/patterns';
+import { BrandBar } from '../../src/components/logo';
 import { FadeIn, webInteractive } from '../../src/components/motion';
 import { useTheme } from '../../src/theme';
 
@@ -98,20 +99,20 @@ export default function CanteenOrders() {
   return (
     <Screen padded={false}>
       <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.md }]}>
-        <AppBar
-          title="Orders"
-          subtitle="● Live — new orders arrive on their own"
+        <BrandBar
+          role="COUNTER"
           right={
-            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+            <>
               <IconButton
                 icon="restaurant-outline"
                 label="Menu"
                 onPress={() => router.push('/menu')}
               />
               <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
-            </View>
+            </>
           }
         />
+        <AppBar title="Orders" subtitle="● Live — new orders arrive on their own" />
 
         {/*
          * The service board's tab bar. Full-width segments with a 48pt target,

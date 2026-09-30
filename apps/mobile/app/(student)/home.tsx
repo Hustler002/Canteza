@@ -44,7 +44,7 @@ import {
   Thumb,
   VegMark,
 } from '../../src/components/patterns';
-import { Logo } from '../../src/components/logo';
+import { BrandBar } from '../../src/components/logo';
 import { FadeIn, webInteractive, type InteractionState } from '../../src/components/motion';
 import { useTheme, type Theme } from '../../src/theme';
 
@@ -151,30 +151,24 @@ export default function StudentHome() {
           { paddingHorizontal: t.space.lg, paddingTop: t.space.md, gap: t.space.lg },
         ]}
       >
-        {/*
-         * The brand bar: the horizontal lockup on the left, the student's own places on the
-         * right -- the brand sheet's nav bar. Home is the one screen that introduces the
-         * product after sign-in; the rest carry a back button instead.
-         */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-          <View style={{ flex: 1 }}>
-            <Logo size={34} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-            <IconButton
-              icon="notifications-outline"
-              label="Notifications"
-              badge={unreadCount}
-              onPress={() => router.push('/inbox')}
-            />
-            <IconButton
-              icon="receipt-outline"
-              label="Your orders"
-              onPress={() => router.push('/my-orders')}
-            />
-            <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
-          </View>
-        </View>
+        <BrandBar
+          right={
+            <>
+              <IconButton
+                icon="notifications-outline"
+                label="Notifications"
+                badge={unreadCount}
+                onPress={() => router.push('/inbox')}
+              />
+              <IconButton
+                icon="receipt-outline"
+                label="Your orders"
+                onPress={() => router.push('/my-orders')}
+              />
+              <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
+            </>
+          }
+        />
 
         <View style={{ gap: t.space.xxs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>

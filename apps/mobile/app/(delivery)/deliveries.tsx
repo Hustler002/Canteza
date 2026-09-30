@@ -23,6 +23,7 @@ import {
 } from '../../src/components/ui';
 import { StatusPill } from '../../src/components/order';
 import { AppBar, Fact, Icon, IconButton, SectionHeader } from '../../src/components/patterns';
+import { BrandBar } from '../../src/components/logo';
 import { FadeIn, webInteractive } from '../../src/components/motion';
 import { useTheme } from '../../src/theme';
 
@@ -66,20 +67,20 @@ export default function Deliveries() {
   return (
     <Screen padded={false}>
       <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.md }]}>
-        <AppBar
-          title="Deliveries"
-          subtitle={identity.profile.full_name ?? undefined}
+        <BrandBar
+          role="DELIVERY"
           right={
-            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+            <>
               <IconButton
                 icon="stats-chart-outline"
                 label="Your record"
                 onPress={() => router.push('/history')}
               />
               <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
-            </View>
+            </>
           }
         />
+        <AppBar title="Deliveries" subtitle={identity.profile.full_name ?? undefined} />
 
         <ShiftSwitch
           online={online}

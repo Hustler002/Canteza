@@ -27,6 +27,7 @@ import {
   columnStyle,
 } from '../../src/components/ui';
 import { AppBar, CardTitle, Icon, IconButton, Thumb } from '../../src/components/patterns';
+import { BrandBar } from '../../src/components/logo';
 import { useTheme } from '../../src/theme';
 
 /**
@@ -71,9 +72,8 @@ export default function CanteenMenu() {
   return (
     <Screen padded={false}>
       <View style={[columnStyle(t), { padding: t.space.lg, paddingBottom: 0, gap: t.space.sm }]}>
-        <AppBar
-          title="Menu"
-          subtitle={`${live.length} ${live.length === 1 ? 'dish' : 'dishes'} on sale`}
+        <BrandBar
+          role="COUNTER"
           right={
             <IconButton
               icon="receipt-outline"
@@ -81,6 +81,10 @@ export default function CanteenMenu() {
               onPress={() => router.push('/orders')}
             />
           }
+        />
+        <AppBar
+          title="Menu"
+          subtitle={`${live.length} ${live.length === 1 ? 'dish' : 'dishes'} on sale`}
         />
         <Body muted>
           Sold out hides a dish for today; taking it off the menu removes it for good.

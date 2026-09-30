@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BRAND, LOGO, logoCapCentres, logoWeights } from '@canteza/shared';
 import { useTheme, type Theme } from '../theme';
+import { Badge } from './ui';
 
 /**
  * The Canteza mark, drawn from Views so it is sharp at any size, follows the theme, and
@@ -163,6 +165,42 @@ export function Logo({
       >
         {BRAND.name}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * The brand bar: the horizontal lockup on the left, the screen's own actions on the right
+ * -- the brand sheet's nav bar. It opens each role's first screen (student Home, the
+ * counter's board and menu, the delivery queue); screens further in carry a back button
+ * instead. `role` tags the lockup, like the admin's ADMIN badge, so a phone shared at a
+ * counter says at a glance which app is open.
+ */
+export function BrandBar({ role, right }: { role?: string; right?: ReactNode }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+      {/* minWidth 0 and wrap: on a 320px phone the tag drops under the name, never under the buttons. */}
+      <View
+        style={{
+          flex: 1,
+          minWidth: 0,
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          columnGap: t.space.sm,
+          rowGap: t.space.xs,
+        }}
+      >
+        <Logo size={34} />
+        {role ? (
+          // Badge sizes itself with alignSelf; the wrapper is what the row centres.
+          <View>
+            <Badge label={role} tone="primary" />
+          </View>
+        ) : null}
+      </View>
+      {right ? <View style={{ flexDirection: 'row', gap: t.space.sm }}>{right}</View> : null}
     </View>
   );
 }

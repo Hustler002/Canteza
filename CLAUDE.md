@@ -572,7 +572,7 @@ holds the compositions — `AppBar`, `IconButton`, `Icon`, `Chip`, `SectionHeade
 `CardTitle`, `OptionCard`, `CheckRow`, `Fact`, `Divider`, `Skeleton`, `SkeletonList`,
 `Price`, `QtyStepper`, `Thumb`, `VegMark`, `Rating`; `motion.tsx` holds `FadeIn`,
 `useReducedMotion` and `webInteractive`; `auth-shell.tsx` frames sign-in/up; `logo.tsx`
-holds `LogoMark` and the `Logo` lockup.
+holds `LogoMark`, the `Logo` lockup and `BrandBar`.
 
 **The 2026-09-29 visual refresh** (presentation only — no query, RPC, auth or payment code
 changed). What it settled, so later screens match rather than drift:
@@ -622,8 +622,11 @@ saffron on stone. How it is built, so the next change is one edit:
   round ends, one more is the room. No image files and no `react-native-svg` (which would
   mean a native rebuild), sharp at every size, colours from the theme — saffron tile in
   light, the brighter saffron on the dark tile in dark, as the sheet asks. Used on the
-  sign-in panel (reversed: white tile on saffron) and as the horizontal lockup at the top
-  of Home (the sheet's nav bar).
+  sign-in panel (reversed: white tile on saffron), and in `BrandBar` — the lockup plus the
+  screen's actions, the sheet's nav bar — on each role's first screens: student Home, the
+  counter's board and menu (tagged COUNTER), the delivery queue (tagged DELIVERY), like
+  the admin's ADMIN badge. Screens further in keep their back button. On a 320px phone the
+  tag wraps under the name rather than running under the buttons (measured).
 - **The admin draws it as inline SVG** (`apps/admin/src/app/logo.tsx`), the name in Plus
   Jakarta Sans via `next/font` (self-hosted at build time), colours in `globals.css`.
   Stacked on the sign-in page, horizontal in the dashboard header.
@@ -637,6 +640,9 @@ saffron on stone. How it is built, so the next change is one edit:
   SVG or the web page's boot splash drifts from the definition.
 - **The web page shows the mark while its 5 MB bundle downloads** — an inline SVG inside
   `#root` in `public/index.html`, which React replaces on its first render.
+- **Live since `dc8a617`** on both sites: every served logo file is byte-identical to the
+  repo, and the relayed production pages showed the reversed mark on sign-in, the lockup
+  on Home, and the admin's login and dashboard header (signed in), with no console errors.
 - **Not done:** the phone's native splash screen (`expo-splash-screen` is not installed;
   `assets/splash-icon.png` is ready for it), and the new app icons reach a phone only with
   the next EAS build. Empty states still use their emoji.
