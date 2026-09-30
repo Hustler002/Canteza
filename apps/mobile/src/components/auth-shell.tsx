@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Text, useWindowDimensions, View } from 'react-native';
 import { BRAND } from '@canteza/shared';
 import { useTheme } from '../theme';
+import { LogoMark } from './logo';
 import { FadeIn } from './motion';
 import { Card, Screen } from './ui';
 
@@ -113,22 +114,8 @@ function BrandPanel({ tall }: { tall: boolean }) {
         }}
       />
 
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: 16,
-          backgroundColor: t.color.onPrimary,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={[t.font.display, { color: t.color.primary, fontSize: 28, lineHeight: 34 }]}>
-          {BRAND.name[0]}
-        </Text>
-      </View>
+      {/* The mark reversed, white on saffron -- the brand sheet's lockup for a saffron field. */}
+      <LogoMark size={tall ? 72 : 56} tone="reversed" />
 
       <View style={{ gap: t.space.xs }}>
         <Text

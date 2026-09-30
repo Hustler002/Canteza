@@ -41,40 +41,6 @@ export function Icon({
 }
 
 /**
- * The brand mark: a saffron tile with the initial, standing in for a logo until there
- * is one. Used where the product introduces itself -- sign-in, sign-up.
- */
-export function BrandMark({ size = 56, initial }: { size?: number; initial: string }) {
-  const t = useTheme();
-  return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.3,
-          backgroundColor: t.color.primary,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        t.elevation.card,
-      ]}
-    >
-      <Text
-        style={[
-          t.font.display,
-          { color: t.color.onPrimary, fontSize: size * 0.5, lineHeight: size * 0.6 },
-        ]}
-      >
-        {initial}
-      </Text>
-    </View>
-  );
-}
-
-/**
  * The top bar, replacing the full-width "← Back" buttons that opened ten screens.
  *
  * Those cost a whole button's height of the most valuable space on the screen and

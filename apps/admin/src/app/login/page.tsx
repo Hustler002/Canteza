@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from '@canteza/api';
-import { BRAND, toAppError } from '@canteza/shared';
+import { toAppError } from '@canteza/shared';
 import { createClientSupabase } from '@/lib/supabase/client';
 import { captchaRequired, Turnstile } from './turnstile';
+import { Logo } from '../logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,9 +42,11 @@ export default function LoginPage() {
   return (
     <main className="center">
       <form className="login" onSubmit={onSubmit}>
-        <div>
-          <h1>{BRAND.name}</h1>
-          <p className="muted">Admin dashboard</p>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 8, textAlign: 'center' }}>
+          <Logo as="h1" layout="stacked" size={64} />
+          <p className="muted" style={{ margin: 0 }}>
+            Admin dashboard
+          </p>
         </div>
 
         <div className="field">

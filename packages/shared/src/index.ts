@@ -3,6 +3,7 @@ export * from './brand';
 export * from './config';
 export * from './errors';
 export * from './limits';
+export * from './logo';
 export * from './money';
 export * from './notifications';
 export * from './order-status';

@@ -44,6 +44,7 @@ import {
   Thumb,
   VegMark,
 } from '../../src/components/patterns';
+import { Logo } from '../../src/components/logo';
 import { FadeIn, webInteractive, type InteractionState } from '../../src/components/motion';
 import { useTheme, type Theme } from '../../src/theme';
 
@@ -150,15 +151,14 @@ export default function StudentHome() {
           { paddingHorizontal: t.space.lg, paddingTop: t.space.md, gap: t.space.lg },
         ]}
       >
+        {/*
+         * The brand bar: the horizontal lockup on the left, the student's own places on the
+         * right -- the brand sheet's nav bar. Home is the one screen that introduces the
+         * product after sign-in; the rest carry a back button instead.
+         */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-          <View style={{ flex: 1, gap: t.space.xxs }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>
-              <Icon name="location" size={15} color={t.color.primary} />
-              <Text style={[t.font.overline, { color: t.color.primary }]}>DELIVERING TO</Text>
-            </View>
-            <Text style={[t.font.heading, { color: t.color.text }]} numberOfLines={1}>
-              {deliveryLine}
-            </Text>
+          <View style={{ flex: 1 }}>
+            <Logo size={34} />
           </View>
           <View style={{ flexDirection: 'row', gap: t.space.sm }}>
             <IconButton
@@ -174,6 +174,16 @@ export default function StudentHome() {
             />
             <IconButton icon="log-out-outline" label="Sign out" onPress={confirmSignOut} />
           </View>
+        </View>
+
+        <View style={{ gap: t.space.xxs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs }}>
+            <Icon name="location" size={15} color={t.color.primary} />
+            <Text style={[t.font.overline, { color: t.color.primary }]}>DELIVERING TO</Text>
+          </View>
+          <Text style={[t.font.heading, { color: t.color.text }]} numberOfLines={1}>
+            {deliveryLine}
+          </Text>
         </View>
 
         <Text style={[t.font.display, { color: t.color.text, fontSize: 26, lineHeight: 32 }]}>

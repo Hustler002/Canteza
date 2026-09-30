@@ -370,3 +370,36 @@ h3 {
 .item > form {
   margin-top: 16px;
 }
+
+/* The Canteza lockup (logo.tsx). The mark's colours follow the scheme like every other
+   token: saffron tile in light; in dark, the brighter saffron on a dark tile, as the
+   brand sheet asks. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text);
+}
+.logo-tile {
+  fill: #e8590c;
+}
+.logo-glyph {
+  stroke: #ffffff;
+}
+.logo-dot {
+  fill: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  .logo-tile {
+    fill: #221e1c;
+  }
+  .logo-glyph {
+    stroke: #ff7a2e;
+  }
+  .logo-dot {
+    fill: #ff7a2e;
+  }
+}

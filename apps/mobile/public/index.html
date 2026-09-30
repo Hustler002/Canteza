@@ -11,6 +11,7 @@
     <!-- Installable from the browser: the manifest, the home-screen icon, and a status bar
          that matches the app. Icons come from assets/icon.png via npm run web:icons. -->
     <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -56,6 +57,28 @@
           background-color: #0f0d0c;
         }
       }
+      /* The mark, centred, while the app's JavaScript downloads. React replaces everything
+         inside #root on its first render, so this needs no code to remove it. */
+      .boot {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .boot svg {
+        animation: boot-in 480ms ease-out both;
+      }
+      @keyframes boot-in {
+        from {
+          opacity: 0;
+          transform: scale(0.92);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot svg {
+          animation: none;
+        }
+      }
     </style>
   </head>
 
@@ -63,6 +86,20 @@
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
     <noscript> You need to enable JavaScript to run this app. </noscript>
     <!-- The root element for your Expo app. -->
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="72" height="72">
+          <rect width="1024" height="1024" rx="236" fill="#E8590C" />
+          <path
+            d="M 685.67 338.33 A 245.6 245.6 0 1 0 685.67 685.67"
+            fill="none"
+            stroke="#FFFFFF"
+            stroke-width="131.8"
+            stroke-linecap="round"
+          />
+          <circle cx="737.2" cy="512" r="60.7" fill="#FFFFFF" />
+        </svg>
+      </div>
+    </div>
   </body>
 </html>

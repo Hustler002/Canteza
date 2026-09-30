@@ -570,8 +570,9 @@ automatically, signed in 0.4 s later by the same tap (`signUp` then `signIn`), a
 **layout**); `src/components/ui.tsx` holds the primitives; `src/components/patterns.tsx`
 holds the compositions — `AppBar`, `IconButton`, `Icon`, `Chip`, `SectionHeader`,
 `CardTitle`, `OptionCard`, `CheckRow`, `Fact`, `Divider`, `Skeleton`, `SkeletonList`,
-`Price`, `QtyStepper`, `Thumb`, `VegMark`, `Rating`, `BrandMark`; `motion.tsx` holds
-`FadeIn`, `useReducedMotion` and `webInteractive`; `auth-shell.tsx` frames sign-in/up.
+`Price`, `QtyStepper`, `Thumb`, `VegMark`, `Rating`; `motion.tsx` holds `FadeIn`,
+`useReducedMotion` and `webInteractive`; `auth-shell.tsx` frames sign-in/up; `logo.tsx`
+holds `LogoMark` and the `Logo` lockup.
 
 **The 2026-09-29 visual refresh** (presentation only — no query, RPC, auth or payment code
 changed). What it settled, so later screens match rather than drift:
@@ -604,7 +605,41 @@ changed). What it settled, so later screens match rather than drift:
   session to `localhost` only, and the page writes it to `localStorage` under
   `sb-<ref>-auth-token`. No token passes through the tool transcript. The browser pane's
   phone emulation draws stale frames and mis-aims clicks; test at the pane's own width
-  and measure desktop layout with `getBoundingClientRect` instead.
+  and measure desktop layout with `getBoundingClientRect` instead. **Since CAPTCHA went on**,
+  that script can no longer sign in with a password: it mints a one-time link with the
+  service key and redeems it at `/verify`, like `verify:live`.
+
+**The logo (2026-09-30)**, from the brand sheet "Canteza Logo.pdf": the C is a plate — a
+thick ring seen from above — and the dot in its opening is the room the order is going to;
+saffron on stone. How it is built, so the next change is one edit:
+
+- **One definition, `LOGO` in `packages/shared/src/logo.ts`**, measured from the sheet's
+  1024 master: ring centre, radius and stroke, a 90° opening, the dot, the tile's corner.
+  Rendered back and compared with the master, it differs on 0.21% of pixels (the edges).
+  At 32 px and below the stroke and dot thicken by 15%, the sheet's own rule.
+- **The phone and web app draw it from Views** (`logo.tsx`): a bordered circle is the
+  plate, a 45°-turned square in the tile's colour cuts the opening, two circles are the
+  round ends, one more is the room. No image files and no `react-native-svg` (which would
+  mean a native rebuild), sharp at every size, colours from the theme — saffron tile in
+  light, the brighter saffron on the dark tile in dark, as the sheet asks. Used on the
+  sign-in panel (reversed: white tile on saffron) and as the horizontal lockup at the top
+  of Home (the sheet's nav bar).
+- **The admin draws it as inline SVG** (`apps/admin/src/app/logo.tsx`), the name in Plus
+  Jakarta Sans via `next/font` (self-hosted at build time), colours in `globals.css`.
+  Stacked on the sign-in page, horizontal in the dashboard header.
+- **Every icon file is rendered from `logoSvg()`** by `npm run brand:assets` (in
+  `apps/mobile`), which also runs `web:icons`: the square app icon (the OS rounds it), the
+  Android adaptive foreground/background/monochrome (glyph inside the safe two thirds;
+  the monochrome is also the notification icon), the favicons (thickened), a reversed
+  splash mark, the web manifest icons (now also `maskable`), and the admin's `icon.svg`
+  and `apple-icon.png`. `sharp` is a root devDependency for it. The script imports the
+  TypeScript source directly (Node's type stripping). `logo.test.ts` fails if a committed
+  SVG or the web page's boot splash drifts from the definition.
+- **The web page shows the mark while its 5 MB bundle downloads** — an inline SVG inside
+  `#root` in `public/index.html`, which React replaces on its first render.
+- **Not done:** the phone's native splash screen (`expo-splash-screen` is not installed;
+  `assets/splash-icon.png` is ready for it), and the new app icons reach a phone only with
+  the next EAS build. Empty states still use their emoji.
 
 Four decisions worth not re-litigating:
 

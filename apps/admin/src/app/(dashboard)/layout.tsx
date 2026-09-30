@@ -3,6 +3,7 @@ import { getIdentity } from '@canteza/api';
 import { BRAND } from '@canteza/shared';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { SignOutButton } from '@/app/sign-out-button';
+import { Logo } from '@/app/logo';
 
 /**
  * The signed-in admin shell. `(dashboard)` is a route group, so it adds nothing to a
@@ -43,9 +44,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <main className="shell">
       <header className="topbar">
         <div>
-          <span className="badge">ADMIN</span>
-          <h1 style={{ marginTop: 8 }}>{BRAND.name}</h1>
-          <p className="muted">{identity.profile.full_name || identity.email}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <Logo as="h1" size={40} />
+            <span className="badge">ADMIN</span>
+          </div>
+          <p className="muted" style={{ marginTop: 8 }}>
+            {identity.profile.full_name || identity.email}
+          </p>
         </div>
         <SignOutButton />
       </header>
