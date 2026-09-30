@@ -78,6 +78,38 @@ a new student's confirmation link points at nothing.
 Test mode works on any address. Before **live** keys, Razorpay asks for the website
 during activation — give it the student app's Vercel address.
 
+### 5. CAPTCHA on sign-in and sign-up (Cloudflare Turnstile)
+
+Sign-up is open to any email, so a script could create accounts and hammer sign-in. The
+apps carry a Turnstile widget; GoTrue checks its token once CAPTCHA protection is on.
+**The order matters** — switch Supabase first and every sign-in fails, because no build
+yet sends a token.
+
+1. **Cloudflare → Turnstile → Add widget.** Mode **Managed**. Hostnames:
+   `canteza-mobile.vercel.app`, `canteza-admin.vercel.app`, and `localhost` for local work.
+   The phone's WebView borrows `canteza-mobile.vercel.app` (`TURNSTILE_WEBVIEW_ORIGIN` in
+   `src/lib/captcha.ts`), so that hostname stays on the list even without a web launch.
+   Copy the **site key** (public) and the **secret key** (secret).
+2. **Vercel, both projects, Production:** `EXPO_PUBLIC_TURNSTILE_SITE_KEY` on
+   `canteza-mobile`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` on `canteza-admin` — the site key,
+   not the secret. Redeploy both, open each sign-in page and see the widget answer
+   "Success!", and sign in once. Tokens are sent and ignored at this stage.
+3. **Supabase → Authentication → Attack Protection → Enable CAPTCHA protection**,
+   provider **Turnstile**, paste the **secret key**, save. From now on a sign-in without
+   a valid token answers `CAPTCHA_FAILED`.
+4. `npm run verify:live` — its sign-ins now go through `signInPastCaptcha` (a one-time
+   link minted with the service key, redeemed by the anon client), so it still passes.
+
+The phone needs the same site key in `eas.json`'s `env` (done for all three profiles)
+**and a new build**: the widget runs in `react-native-webview`, which older development
+builds do not contain. Such a build shows a notice and submits without a token, so it
+keeps working until step 3 — and gets `CAPTCHA_FAILED` after it. The same fallback
+covers a browser that blocks challenges.cloudflare.com.
+
+**Done on 2026-09-30:** the widget exists (site key `0x4AAAAAAFKJBycg8MVUWL8b`, public);
+the key is a Production variable on both Vercel projects, in all three `eas.json` profiles
+and in both local env files. Steps 3–4 remain.
+
 ## Updating it
 
 Every push to `main` redeploys both projects. A pull request gets its own preview URL.

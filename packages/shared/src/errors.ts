@@ -9,6 +9,7 @@ export const ERROR_CODES = {
   WEAK_PASSWORD: 'WEAK_PASSWORD',
   EMAIL_NOT_CONFIRMED: 'EMAIL_NOT_CONFIRMED',
   RATE_LIMITED: 'RATE_LIMITED',
+  CAPTCHA_FAILED: 'CAPTCHA_FAILED',
   FORBIDDEN: 'FORBIDDEN',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
   NOT_FOUND: 'NOT_FOUND',
@@ -44,6 +45,7 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   WEAK_PASSWORD: 'Use at least 8 characters, with a letter and a number.',
   EMAIL_NOT_CONFIRMED: 'Check your email and confirm your address first.',
   RATE_LIMITED: 'Too many attempts. Wait a minute and try again.',
+  CAPTCHA_FAILED: 'The security check did not go through. Wait for it to finish, then try again.',
   FORBIDDEN: "You don't have access to this.",
   ACCOUNT_SUSPENDED:
     'This account has been suspended. Contact support if you think this is a mistake.',

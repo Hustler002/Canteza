@@ -35,30 +35,54 @@ export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * What a CAPTCHA widget handed back, for GoTrue to verify with the provider.
+ *
+ * Optional because the check is switched on in the Supabase dashboard, not here: with it
+ * off GoTrue ignores the token, and with no site key configured the app sends none. Each
+ * token is good for **one** request, so a screen asks for a fresh one after every
+ * attempt, successful or not.
+ */
+type Captcha = { captchaToken?: string | null | undefined };
+
+function captchaOption(input: Captcha): { captchaToken?: string } {
+  return input.captchaToken ? { captchaToken: input.captchaToken } : {};
+}
+
+/**
+ * Creates the account and says whether it is already signed in.
+ *
+ * With "Confirm email" off, GoTrue answers a sign-up with a session, so there is nothing
+ * left to do — and nothing to spend a second CAPTCHA token on. With it on there is no
+ * session until the address is confirmed.
+ */
 export async function signUp(
   client: CampusClient,
-  input: { email: string; password: string; fullName: string },
-): Promise<void> {
+  input: { email: string; password: string; fullName: string } & Captcha,
+): Promise<{ signedIn: boolean }> {
   const weak = validatePassword(input.password);
   if (weak) throw weak;
 
   // Every signup is a student. Staff and partners are promoted server-side by an
   // admin, so there is no role field here to tamper with.
-  const { error } = await client.auth.signUp({
+  const { data, error } = await client.auth.signUp({
     email: normaliseEmail(input.email),
     password: input.password,
-    options: { data: { full_name: input.fullName.trim() } },
+    options: { data: { full_name: input.fullName.trim() }, ...captchaOption(input) },
   });
   if (error) throw mapSupabaseError(error);
+  return { signedIn: Boolean(data.session) };
 }
 
 export async function signIn(
   client: CampusClient,
-  input: { email: string; password: string },
+  input: { email: string; password: string } & Captcha,
 ): Promise<void> {
+  const captcha = captchaOption(input);
   const { error } = await client.auth.signInWithPassword({
     email: normaliseEmail(input.email),
     password: input.password,
+    ...(captcha.captchaToken ? { options: captcha } : {}),
   });
   if (error) throw mapSupabaseError(error);
 }

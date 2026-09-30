@@ -172,12 +172,30 @@ async function ensureUser({ email, name }) {
   }
 }
 
+/**
+ * A session for one demo account. With CAPTCHA protection on, a password sign-in needs a
+ * Turnstile token a script cannot get; then a one-time sign-in link is minted with the
+ * service key and redeemed at `/verify`, which is not CAPTCHA-protected.
+ */
 async function signIn(email) {
-  const res = await api('/auth/v1/token?grant_type=password', {
-    method: 'POST',
-    body: { email, password: PASSWORD },
-  });
-  return res.access_token;
+  try {
+    const res = await api('/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      body: { email, password: PASSWORD },
+    });
+    return res.access_token;
+  } catch (err) {
+    if (!/captcha/i.test(String(err))) throw err;
+    const link = await api('/auth/v1/admin/generate_link', {
+      method: 'POST',
+      body: { type: 'magiclink', email },
+    });
+    const session = await api('/auth/v1/verify', {
+      method: 'POST',
+      body: { type: 'magiclink', token_hash: link.hashed_token ?? link.properties?.hashed_token },
+    });
+    return session.access_token;
+  }
 }
 
 const rpc = (token, fn, args) => api(`/rest/v1/rpc/${fn}`, { token, method: 'POST', body: args });

@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 8 in progress.** 519 tests green offline, plus 97 live checks
+**Phase 8 in progress.** 531 tests green offline, plus 97 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history, engagement, canteen stats, the notification inbox, the
 payment infrastructure and the online checkout. **The inbox is done. Razorpay works end
@@ -831,11 +831,46 @@ Departures from the original brief, all argued in the ADRs:
     Per Supabase's docs, an existing user whose password falls short can still sign in.
   - **Leaked-password protection** — the advisor reports it off, and Supabase's docs say
     it is a **Pro-plan feature**, so it cannot be switched on while the org is on Free.
-  - **CAPTCHA** — **do not switch it on from the dashboard alone.** Once on, GoTrue
-    refuses every sign-in and sign-up that carries no `captchaToken`, and nothing in this
-    repo sends one: the web app, the phone app, the admin and `verify:live` would all be
-    locked out. It needs a Turnstile/hCaptcha widget wired into `signIn`/`signUp` first
-    (and a WebView answer on the phone), then the toggle.
+  - **CAPTCHA** — **built (Cloudflare Turnstile), not yet switched on.** Once on, GoTrue
+    refuses every sign-in and sign-up without a valid token, so the rollout order in
+    `apps/mobile/WEB.md` §5 is the whole safety: site key into the builds and deployed
+    first, the Supabase switch last. How it is put together:
+    - **Off unless a site key is set** (`EXPO_PUBLIC_TURNSTILE_SITE_KEY`,
+      `NEXT_PUBLIC_TURNSTILE_SITE_KEY`): no key, no widget, no token — today's behaviour.
+    - **`useCaptcha()`** (`src/components/captcha.tsx`) is the one hook both auth screens
+      use: `ready` gates the button, `reset()` runs after **every** attempt, because a
+      token is good for one request. Metro picks `turnstile.web.tsx` (Cloudflare's script,
+      loaded on first use; CSP allows `challenges.cloudflare.com`) or `turnstile.tsx` (a
+      WebView borrowing `canteza-mobile.vercel.app` as its hostname). The admin login has
+      its own copy (`src/app/login/turnstile.tsx`).
+    - **Sign-up no longer signs in a second time.** With "Confirm email" off, `signUp`
+      already returns a session (`{ signedIn }`); the old `signUp` + `signIn` pair would
+      have needed two tokens.
+    - **`react-native-webview` is loaded lazily**, like Razorpay: its TurboModule is
+      fetched with `getEnforcing` at import, which throws in any build made before it was
+      added. `test/turnstile.test.ts` pins that, the message parser, the page and the CSP.
+      The phone needs a **new build** to sign in once CAPTCHA is on.
+    - **Scripts:** a script cannot solve a CAPTCHA, so when GoTrue refuses a password
+      sign-in for that reason `verify-live.mjs` and `seed-users.mjs` mint a one-time link
+      with the service key and redeem it at `/verify` (not CAPTCHA-protected). Both paths
+      were run against the live project while CAPTCHA was still off; the service key never
+      queries data in `verify:live`.
+    - **Proven in a browser** on the production web build with Cloudflare's always-pass
+      test key, under the real CSP: the widget loaded with no violations; sign-in sent
+      `gotrue_meta_security.captcha_token` and a fresh token replaced the spent one; sign-up
+      made **one** request carrying the token. (`fetch` was stubbed, so nothing left the
+      page.) The admin build compiled with the key inlined; its login was not clicked
+      through. **Not yet proven:** a real key with the Supabase switch on.
+    - **The real widget is set up (2026-09-30):** site key `0x4AAAAAAFKJBycg8MVUWL8b`
+      (public) is a Production variable on both Vercel projects, in all three `eas.json`
+      profiles and in both local env files. A local build with it rendered Cloudflare's
+      challenge on `localhost` with no Turnstile error — the key and hostname are
+      accepted. (The challenge itself was not solved: that is for a person.)
+    - **A widget that cannot run does not lock the form.** An old phone build without the
+      WebView module, or a browser blocking Cloudflare, submits without a token and
+      GoTrue decides — fine while the switch is off, `CAPTCHA_FAILED` after. Proven by
+      serving the build with Cloudflare removed from the CSP: the notice showed, the
+      button stayed usable, the request carried no token.
   - **Realtime "private channels only"** — the app uses no broadcast channels, so anyone
     holding the public key can broadcast on one; harmless to the data, noise at worst.
 

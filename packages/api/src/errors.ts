@@ -18,6 +18,8 @@ const AUTH_MESSAGES: Array<[RegExp, ErrorCode]> = [
   [/already registered|already been registered|user already exists/i, ERROR_CODES.EMAIL_IN_USE],
   [/password should be|password is too short|weak password/i, ERROR_CODES.WEAK_PASSWORD],
   [/rate limit|too many requests/i, ERROR_CODES.RATE_LIMITED],
+  // GoTrue refused the Turnstile token: missing, spent, expired or failed.
+  [/captcha/i, ERROR_CODES.CAPTCHA_FAILED],
   [/jwt expired|invalid claim|session.*missing|refresh token/i, ERROR_CODES.UNAUTHENTICATED],
 ];
 

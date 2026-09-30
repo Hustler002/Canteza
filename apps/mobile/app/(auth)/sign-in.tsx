@@ -5,6 +5,7 @@ import { signIn } from '@canteza/api';
 import { toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
 import { AuthShell } from '../../src/components/auth-shell';
+import { useCaptcha } from '../../src/components/captcha';
 import { Button, Field, FormError } from '../../src/components/ui';
 import { useTheme } from '../../src/theme';
 
@@ -14,17 +15,21 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const captcha = useCaptcha();
 
   async function submit() {
+    if (!captcha.ready) return;
     setBusy(true);
     setError(null);
     try {
-      await signIn(supabase, { email, password });
+      await signIn(supabase, { email, password, captchaToken: captcha.token });
       // No navigation here: the session listener re-routes once the role is known.
     } catch (err) {
       setError(toAppError(err).userMessage);
     } finally {
       setBusy(false);
+      // A CAPTCHA token is spent by the attempt, whatever it answered.
+      captcha.reset();
     }
   }
 
@@ -62,13 +67,14 @@ export default function SignIn() {
         onSubmitEditing={submit}
         returnKeyType="go"
       />
+      {captcha.element}
       <FormError message={error} />
       <Button
         label="Sign in"
         size="lg"
         onPress={submit}
         loading={busy}
-        disabled={email.length === 0 || password.length === 0}
+        disabled={email.length === 0 || password.length === 0 || !captcha.ready}
       />
     </AuthShell>
   );

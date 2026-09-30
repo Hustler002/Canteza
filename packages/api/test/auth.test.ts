@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseEmail, validatePassword } from '../src/auth';
+import { normaliseEmail, signIn, signUp, validatePassword } from '../src/auth';
+import { mapSupabaseError } from '../src/errors';
+import type { CampusClient } from '../src/client';
 import { createCampusClient } from '../src/client';
 
 describe('validatePassword', () => {
@@ -50,5 +52,61 @@ describe('createCampusClient', () => {
         anonKey: 'sb_publishable_6wHsAIUHgVyOfifNqyBNWQ_YipbMxwV',
       }),
     ).not.toThrow();
+  });
+});
+
+describe('CAPTCHA tokens', () => {
+  type Call = Record<string, unknown>;
+  const stub = (session: object | null = null) => {
+    const calls: { signIn: Call[]; signUp: Call[] } = { signIn: [], signUp: [] };
+    const client = {
+      auth: {
+        signInWithPassword: async (args: Call) => {
+          calls.signIn.push(args);
+          return { data: {}, error: null };
+        },
+        signUp: async (args: Call) => {
+          calls.signUp.push(args);
+          return { data: { session }, error: null };
+        },
+      },
+    } as unknown as CampusClient;
+    return { client, calls };
+  };
+
+  it('hands the token to GoTrue on sign-in, and sends no options without one', async () => {
+    const { client, calls } = stub();
+    await signIn(client, { email: 'a@b.c', password: 'hostel2026', captchaToken: 'tok' });
+    await signIn(client, { email: 'a@b.c', password: 'hostel2026' });
+    expect(calls.signIn[0]).toMatchObject({ options: { captchaToken: 'tok' } });
+    expect(calls.signIn[1]).not.toHaveProperty('options');
+  });
+
+  it('hands the token to GoTrue on sign-up, beside the name', async () => {
+    const { client, calls } = stub();
+    await signUp(client, {
+      email: 'a@b.c',
+      password: 'hostel2026',
+      fullName: ' Riya ',
+      captchaToken: 'tok',
+    });
+    expect(calls.signUp[0]).toMatchObject({
+      options: { data: { full_name: 'Riya' }, captchaToken: 'tok' },
+    });
+  });
+
+  it('reports whether sign-up already signed the student in', async () => {
+    const withSession = stub({ access_token: 'x' });
+    const without = stub(null);
+    const input = { email: 'a@b.c', password: 'hostel2026', fullName: 'Riya' };
+    expect(await signUp(withSession.client, input)).toEqual({ signedIn: true });
+    expect(await signUp(without.client, input)).toEqual({ signedIn: false });
+  });
+
+  it('turns a refused token into CAPTCHA_FAILED', () => {
+    expect(
+      mapSupabaseError({ message: 'captcha protection: request disallowed (no captcha response)' })
+        .code,
+    ).toBe('CAPTCHA_FAILED');
   });
 });

@@ -17,8 +17,10 @@
  *
  *   node --env-file=.env scripts/verify-live.mjs
  *
- * Needs SUPABASE_URL and SUPABASE_ANON_KEY. The service role key is never read here,
- * on purpose: if this file could bypass RLS it could not test it.
+ * Needs SUPABASE_URL and SUPABASE_ANON_KEY. The service role key is never used for a
+ * query here, on purpose: if this file could bypass RLS it could not test it. Its one use
+ * is `signInPastCaptcha`, and only once CAPTCHA protection refuses a password sign-in —
+ * it mints a sign-in link that the anon client then redeems.
  */
 import { createClient } from '@supabase/supabase-js';
 
@@ -86,12 +88,45 @@ function section(title) {
   console.log(`\n${title}`);
 }
 
-/** A fresh client per person: sessions must not leak between roles. */
+/**
+ * A fresh client per person: sessions must not leak between roles.
+ *
+ * With CAPTCHA protection on, GoTrue refuses a password sign-in that carries no
+ * Turnstile token, and a script cannot solve one. Then — and only then — the service key
+ * mints a one-time sign-in link and the **anon** client redeems it (`/verify` is not
+ * CAPTCHA-protected: a person clicking an email link cannot solve one either). The
+ * service key never touches data: every query below still runs as the signed-in person,
+ * through RLS, which is the whole point of this script.
+ */
 async function signIn(email) {
   const client = createClient(URL_BASE, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await client.auth.signInWithPassword({ email, password: PASSWORD });
+  if (!error) return { client, userId: data.user.id };
+  if (!/captcha/i.test(error.message)) throw new Error(`${email}: ${error.message}`);
+  return signInPastCaptcha(client, email);
+}
+
+async function signInPastCaptcha(client, email) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error(
+      `${email}: CAPTCHA is on, so signing in needs SUPABASE_SERVICE_ROLE_KEY in .env to mint a link`,
+    );
+  }
+  const admin = createClient(URL_BASE, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+  if (linkError) throw new Error(`${email}: ${linkError.message}`);
+  const { data, error } = await client.auth.verifyOtp({
+    token_hash: link.properties.hashed_token,
+    type: 'magiclink',
+  });
   if (error) throw new Error(`${email}: ${error.message}`);
   return { client, userId: data.user.id };
 }

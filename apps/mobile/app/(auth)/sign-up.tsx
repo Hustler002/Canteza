@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { Text, View } from 'react-native';
-import { signIn, signUp, validatePassword } from '@canteza/api';
+import { signUp, validatePassword } from '@canteza/api';
 import { TEXT_LIMITS, toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
 import { AuthShell } from '../../src/components/auth-shell';
+import { useCaptcha } from '../../src/components/captcha';
 import { Button, Field, FormError } from '../../src/components/ui';
 import { useTheme } from '../../src/theme';
 
@@ -20,17 +21,25 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const captcha = useCaptcha();
 
   const passwordProblem = password.length > 0 ? validatePassword(password) : null;
 
   async function submit() {
+    if (!captcha.ready) return;
     setBusy(true);
     setError(null);
     try {
-      await signUp(supabase, { email, password, fullName });
-      // Local Supabase auto-confirms; a project requiring email confirmation will
-      // reject this and the user is told to check their inbox.
-      await signIn(supabase, { email, password });
+      // With "Confirm email" off the answer already carries a session and the session
+      // listener routes the new student in; there is no second sign-in, which would
+      // need a second CAPTCHA token. With it on there is no session yet.
+      const { signedIn } = await signUp(supabase, {
+        email,
+        password,
+        fullName,
+        captchaToken: captcha.token,
+      });
+      if (!signedIn) setError('Account created. Check your email to confirm, then sign in.');
     } catch (err) {
       const appError = toAppError(err);
       setError(
@@ -40,6 +49,7 @@ export default function SignUp() {
       );
     } finally {
       setBusy(false);
+      captcha.reset();
     }
   }
 
@@ -84,13 +94,19 @@ export default function SignUp() {
         autoComplete="new-password"
         error={passwordProblem?.userMessage}
       />
+      {captcha.element}
       <FormError message={error} />
       <Button
         label="Create account"
         size="lg"
         onPress={submit}
         loading={busy}
-        disabled={fullName.trim().length === 0 || email.length === 0 || passwordProblem !== null}
+        disabled={
+          fullName.trim().length === 0 ||
+          email.length === 0 ||
+          passwordProblem !== null ||
+          !captcha.ready
+        }
       />
     </AuthShell>
   );
