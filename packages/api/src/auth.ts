@@ -1,4 +1,4 @@
-import { AppError, ERROR_CODES, isRole, type Role, type Row } from '@canteza/shared';
+import { AppError, ERROR_CODES, isCampusEmail, isRole, type Role, type Row } from '@canteza/shared';
 import type { CampusClient } from './client';
 import { mapSupabaseError, unwrap } from './errors';
 
@@ -62,6 +62,9 @@ export async function signUp(
 ): Promise<{ signedIn: boolean }> {
   const weak = validatePassword(input.password);
   if (weak) throw weak;
+  // The database refuses anything else too (the Before User Created hook); this only
+  // saves the student a round trip and a CAPTCHA token.
+  if (!isCampusEmail(input.email)) throw new AppError(ERROR_CODES.EMAIL_NOT_ALLOWED);
 
   // Every signup is a student. Staff and partners are promoted server-side by an
   // admin, so there is no role field here to tamper with.
@@ -72,6 +75,48 @@ export async function signUp(
   });
   if (error) throw mapSupabaseError(error);
   return { signedIn: Boolean(data.session) };
+}
+
+/**
+ * Confirms the address with the code from the email, which also signs the student in.
+ *
+ * Then sets the password they just typed. GoTrue answers a second sign-up for an
+ * unconfirmed address by re-sending the code **without** touching the password (read in
+ * its `signup.go`), so whoever signed up first chose the password — possibly not the
+ * mailbox's owner. The code proves who owns the mailbox; this makes the password theirs
+ * too. When it is already theirs GoTrue answers `same_password`, which is the good case.
+ */
+export async function verifySignUpCode(
+  client: CampusClient,
+  input: { email: string; code: string; password: string },
+): Promise<void> {
+  const { error } = await client.auth.verifyOtp({
+    email: normaliseEmail(input.email),
+    token: input.code.replace(/\s+/g, ''),
+    type: 'signup',
+  });
+  if (error) throw mapSupabaseError(error);
+
+  const { error: passwordError } = await client.auth.updateUser({ password: input.password });
+  if (passwordError && passwordError.code !== 'same_password') {
+    throw mapSupabaseError(passwordError);
+  }
+}
+
+/**
+ * Sends a fresh code. GoTrue guards `/resend` with the CAPTCHA like sign-up, and allows
+ * one email per address per minute (its "minimum interval"), so the screen waits too.
+ */
+export async function resendSignUpCode(
+  client: CampusClient,
+  input: { email: string } & Captcha,
+): Promise<void> {
+  const { error } = await client.auth.resend({
+    type: 'signup',
+    email: normaliseEmail(input.email),
+    ...(input.captchaToken ? { options: { captchaToken: input.captchaToken } } : {}),
+  });
+  if (error) throw mapSupabaseError(error);
 }
 
 export async function signIn(

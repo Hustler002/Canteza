@@ -1,0 +1,12 @@
+<!--
+  "Confirm signup" email. Paste into Supabase: Authentication -> Emails -> Confirm signup.
+  Subject: Your Canteza code: {{ .Token }}
+
+  A code, not a link: the app asks for the code (`verifySignUpCode`), and a link would
+  confirm the address in the browser without ever reaching the app. The code expires
+  after "Email OTP Expiration" (1 hour by default).
+-->
+<h2>Your Canteza code</h2>
+<p>Enter this code in the app to confirm your college email and finish signing up:</p>
+<p style="font-size: 28px; font-weight: 700; letter-spacing: 6px">{{ .Token }}</p>
+<p>It expires in an hour. If you did not try to sign up to Canteza, ignore this email.</p>

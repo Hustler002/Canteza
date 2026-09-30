@@ -24,7 +24,9 @@ const AUTH_SHIM = `
     id                 uuid primary key default gen_random_uuid(),
     email              text unique,
     raw_user_meta_data jsonb not null default '{}',
-    banned_until       timestamptz
+    banned_until       timestamptz,
+    -- An address change waits here until confirmed (campus_email_signup guards both).
+    email_change       text
   );
 
   -- Suspending an account ends its sessions (security_hardening). On Supabase the
@@ -44,6 +46,8 @@ const AUTH_SHIM = `
   create role anon;
   create role authenticated;
   create role service_role;
+  -- GoTrue runs as this role; auth hooks are granted to it (campus_email_signup).
+  create role supabase_auth_admin;
 
   -- Supabase grants select/insert/update/delete on every table in public to anon and
   -- authenticated by default. Modelling that here is the whole point: without it, PGlite

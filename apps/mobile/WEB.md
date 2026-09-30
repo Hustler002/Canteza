@@ -111,6 +111,48 @@ the key is a Production variable on both Vercel projects, in all three `eas.json
 and in both local env files. **Steps 3–4 done the same day:** CAPTCHA protection is on
 in Supabase; a token-less sign-in answers `captcha_failed`; `verify:live` 97/97.
 
+### 6. Student sign-up by college email, with a code
+
+One mailbox, one account: a student account needs an `@mnnit.ac.in` address (no `+tag`)
+and the 6-digit code emailed to it. The app, the migration (`campus_email_signup`) and
+the email template are in the repo; the switches below are dashboard-only. **The order
+matters**: turn on "Confirm email" before email can actually be delivered and no student
+can finish signing up.
+
+1. **Deploy the app** (push to `main`). The new sign-up asks for the college email and
+   refuses anything else before sending, and shows a code step whenever GoTrue answers
+   without a session. With "Confirm email" still off it answers with one, so nothing
+   changes for students yet.
+2. **Apply the migration:** `npm run db:push`. It adds the rule, the hook function and a
+   trigger that stops a college account moving to another address. Nothing is enforced
+   until step 5.
+3. **Custom SMTP: Authentication → Emails → SMTP Settings.** Supabase's built-in sender
+   delivers only to the project's team members, a few emails an hour, so without this no
+   student ever gets a code. Any SMTP provider works; the cheapest start is a Gmail
+   account with an **app password** (`smtp.gmail.com`, port 587, about 500 emails a day).
+   A provider like Resend or Brevo needs a domain you own for good delivery. Then raise
+   **Authentication → Rate Limits → emails per hour** from its SMTP default.
+4. **Authentication → Emails → Confirm signup:** subject and body from
+   `supabase/templates/confirmation.html`. A **code**, not a link: the default template
+   sends a link, which confirms the address in the browser and never reaches the app.
+5. **Authentication → Hooks → Before User Created:** Postgres, function
+   `public.hook_before_user_created`. From now on sign-up refuses any other address, with
+   `EMAIL_NOT_ALLOWED`, even from a script.
+6. **Authentication → Sign In / Providers → Email → Confirm email: on.** From now on a
+   new account has no session until its code is entered.
+7. **Check it:** sign up from the web with a real college address; the code arrives, and
+   entering it lands in Home. Sign-up with a Gmail address is refused.
+
+**Staff accounts are made by the admin, not signed up:** the hook runs on public sign-up
+and on invites (read in GoTrue's `signup.go` and `invite.go`), but **not** on
+Authentication → Users → **Add user → Create new user**, or on the admin API
+(`admin.go`), which is what `seed-users.mjs` uses. Create a canteen worker or delivery
+partner there, with "Auto Confirm User" ticked, then attach them in the admin dashboard.
+**"Send invitation" will not work** for a non-college address: the hook refuses it.
+
+**Existing accounts keep working.** Sign-in is not restricted, so the `@campus.edu` demo
+accounts and anyone who signed up before this can still sign in.
+
 ## Updating it
 
 Every push to `main` redeploys both projects. A pull request gets its own preview URL.

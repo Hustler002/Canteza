@@ -8,7 +8,7 @@
 
 ## Where the project is right now
 
-**Phase 8 in progress.** 531 tests green offline, plus 97 live checks
+**Phase 8 in progress.** 557 tests green offline, plus 97 live checks
 (`npm run verify:live`) covering auth, realtime, the full order path, RLS, menu
 management, order history, engagement, canteen stats, the notification inbox, the
 payment infrastructure and the online checkout. **The inbox is done. Razorpay works end
@@ -182,32 +182,33 @@ Consumed as TypeScript source (no build step). Everything else depends on it.
 
 ### `supabase/` — the database
 
-| File                                   | Holds                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------- |
-| `..._schema.sql`                       | 19 tables, indexes, `canteens_public` view, `order_transitions` table      |
-| composite FK                           | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`          |
-| `..._rls.sql`                          | RLS helpers, policies, column-level grants, realtime                       |
-| `..._functions.sql`                    | `place_order`, `transition_order`, `claim_delivery`, `release_delivery`    |
-| `..._student_default_address.sql`      | `profiles.default_hostel_id/block/room`, all-or-nothing                    |
-| `..._delivery_shift_toggle.sql`        | `is_online` gates the queue and claiming; `OFF_SHIFT` error                |
-| `..._harden_default_privileges.sql`    | **Security.** Revokes Supabase's blanket grants, restates the real ones    |
-| `..._admin_set_partner_active.sql`     | Admin ends or restores a delivery posting; canteen id is explicit          |
-| `..._canteen_column_grants.sql`        | **Security.** Staff write hours + pause only; admin writes via RPC         |
-| `..._canteen_create.sql`               | `admin_create_canteen`; canteens lose client INSERT and DELETE             |
-| `..._canteen_staff_attach.sql`         | Attach/detach staff; writes the role with the row. RPC-only table          |
-| `..._delivery_partner_guards.sql`      | Onboarding works on a disabled canteen; refuses counter staff              |
-| `..._profiles_and_hostels_admin.sql`   | `admin_set_profile_active`; no self-demotion; hostels lose DELETE          |
-| `..._revenue_view.sql`                 | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it            |
-| `..._service_role_grants.sql`          | **Security.** States what service_role may do; nothing granted it before   |
-| `..._canteen_stats.sql`                | Ratings + median kitchen minutes. NOT security_invoker, on purpose         |
-| `..._razorpay_payments.sql`            | `record_payment_result`, `begin_razorpay_payment`, `expire_unpaid_orders`  |
-| `..._razorpay_checkout.sql`            | In-sheet retries, first-writer-wins, `REFUND_REQUIRED`, quiet counter      |
-| `..._push_tokens.sql`                  | One row per device; `register_push_token` moves it to whoever signs in     |
-| `..._prepaid_student_notification.sql` | Student's "Order placed" waits for the payment too, like the counter's     |
-| `seed.sql`                             | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings         |
-| `seed-users.mjs`                       | Accounts via the Auth API, then demo orders through the real RPCs          |
-| `functions/`                           | `create-payment`, `verify-payment`, `send-push` (Deno) + tested `_shared/` |
-| `test/`                                | 267 tests on in-process Postgres and `_shared/` — see `test/README.md`     |
+| File                                   | Holds                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| `..._schema.sql`                       | 19 tables, indexes, `canteens_public` view, `order_transitions` table         |
+| composite FK                           | `orders (delivery_partner_id, canteen_id)` -> `delivery_partners`             |
+| `..._rls.sql`                          | RLS helpers, policies, column-level grants, realtime                          |
+| `..._functions.sql`                    | `place_order`, `transition_order`, `claim_delivery`, `release_delivery`       |
+| `..._student_default_address.sql`      | `profiles.default_hostel_id/block/room`, all-or-nothing                       |
+| `..._delivery_shift_toggle.sql`        | `is_online` gates the queue and claiming; `OFF_SHIFT` error                   |
+| `..._harden_default_privileges.sql`    | **Security.** Revokes Supabase's blanket grants, restates the real ones       |
+| `..._admin_set_partner_active.sql`     | Admin ends or restores a delivery posting; canteen id is explicit             |
+| `..._canteen_column_grants.sql`        | **Security.** Staff write hours + pause only; admin writes via RPC            |
+| `..._canteen_create.sql`               | `admin_create_canteen`; canteens lose client INSERT and DELETE                |
+| `..._canteen_staff_attach.sql`         | Attach/detach staff; writes the role with the row. RPC-only table             |
+| `..._delivery_partner_guards.sql`      | Onboarding works on a disabled canteen; refuses counter staff                 |
+| `..._profiles_and_hostels_admin.sql`   | `admin_set_profile_active`; no self-demotion; hostels lose DELETE             |
+| `..._revenue_view.sql`                 | `revenue_by_canteen_day`, **security_invoker** so RLS scopes it               |
+| `..._service_role_grants.sql`          | **Security.** States what service_role may do; nothing granted it before      |
+| `..._canteen_stats.sql`                | Ratings + median kitchen minutes. NOT security_invoker, on purpose            |
+| `..._razorpay_payments.sql`            | `record_payment_result`, `begin_razorpay_payment`, `expire_unpaid_orders`     |
+| `..._razorpay_checkout.sql`            | In-sheet retries, first-writer-wins, `REFUND_REQUIRED`, quiet counter         |
+| `..._push_tokens.sql`                  | One row per device; `register_push_token` moves it to whoever signs in        |
+| `..._prepaid_student_notification.sql` | Student's "Order placed" waits for the payment too, like the counter's        |
+| `..._campus_email_signup.sql`          | **Security.** Sign-up hook: college mailbox only; a college account stays one |
+| `seed.sql`                             | 4 canteens, 28 menu items, 4 hostels, 3 coupons, platform settings            |
+| `seed-users.mjs`                       | Accounts via the Auth API, then demo orders through the real RPCs             |
+| `functions/`                           | `create-payment`, `verify-payment`, `send-push` (Deno) + tested `_shared/`    |
+| `test/`                                | 267 tests on in-process Postgres and `_shared/` — see `test/README.md`        |
 
 **The RPC surface** (everything else is a plain PostgREST select):
 
@@ -934,14 +935,42 @@ Departures from the original brief, all argued in the ADRs:
   `orders` cascades), then the user. There is no "delete my account" flow for students
   yet; when one is needed, it should anonymise the profile rather than delete it.
 
-- **Email addresses are not verified.** "Confirm email" is **off** on the hosted project
-  (2026-09-29; `/auth/v1/settings` reports `mailer_autoconfirm: true`), because with it on
-  no student could ever sign up: there is no custom SMTP, and Supabase's built-in sender
-  delivers **only to members of the project's team**, a few messages an hour (Supabase
-  docs, "Send messages only to pre-authorized addresses"). `sign-up.tsx` handles both
-  settings — with confirmation off, `signUp` then `signIn` lands the student straight in
-  the app. To verify addresses again: add a custom SMTP provider first, then switch
-  "Confirm email" back on. Site URL and redirect URLs are set to the two Vercel addresses.
+- **Student sign-up by college email, with a code (built 2026-09-30, not yet switched on).**
+  One mailbox, one account: a student signs up with an `@mnnit.ac.in` address and enters
+  the code emailed to it. **Until the dashboard steps in `apps/mobile/WEB.md` §6 are done,
+  "Confirm email" is still off** (`mailer_autoconfirm: true`, 2026-09-29) and nothing
+  server-side enforces the domain — only the form does. Off because Supabase's built-in
+  sender delivers only to the project's team, so **custom SMTP comes first**. How it fits:
+  - **The rule is `is_campus_email()`** (`campus_email_signup` migration), mirrored in
+    `packages/shared/src/campus-email.ts`; `supabase/test/campus-email.test.ts` runs both
+    over the same addresses (proven to fail when the SQL allowed `+`). Exactly the domain,
+    no subdomains, **no `+tag`**: the college mail is Google Workspace (its MX records are
+    Google's, checked), where `name+1@` is a second address on one mailbox.
+  - **Enforced by the "Before User Created" auth hook**, `hook_before_user_created`, which
+    GoTrue calls on public sign-up and invites but **not** on the admin API (read in its
+    source: `signup.go`, `invite.go` call it, `admin.go` does not). That is the staff
+    path: canteen workers and delivery partners have no college mailbox, so the admin
+    creates them (dashboard "Add user", or `seed-users.mjs`). Invites to them fail.
+  - **A college account keeps a college address** (trigger `keep_campus_email` on
+    `auth.users`, on `email` and `email_change`); otherwise changing it to a personal
+    address frees the mailbox for a second sign-up. Staff accounts are untouched.
+  - **Verifying also sets the password** (`verifySignUpCode`). GoTrue answers a second
+    sign-up for an unconfirmed address by re-sending the code **without** changing the
+    password (`signup.go`), so whoever signed up first chose it — maybe not the mailbox's
+    owner. The code proves ownership; setting the password the owner typed makes the
+    account theirs. `same_password` is the normal answer and is ignored.
+  - **The app** (`email-code.tsx`, used by sign-up and by sign-in when GoTrue says "Email
+    not confirmed"): the code field, verify, and "send a new code" after 60 s. `/resend`
+    is CAPTCHA-guarded (`/verify` is not), so the widget mounts only once resending is
+    possible. The email is a **code, not a link** (`supabase/templates/confirmation.html`).
+  - **Proven in a browser** against the production build with Cloudflare's test key and a
+    local stand-in for Supabase Auth (nothing reached the live project): a Gmail address
+    is refused before any request; the college one is sent lower-cased with its CAPTCHA
+    token; a wrong code shows `CODE_INVALID` and sets no password; "send a new code"
+    carries a fresh token; sign-in to an unconfirmed account opens the code step. **Not
+    yet proven:** a real email arriving, and the hook refusing on the live project.
+  - Existing accounts are unaffected: sign-in is not restricted. Site URL and redirect
+    URLs are set to the two Vercel addresses.
 
 - **The unpaid-order sweep is scheduled outside the migrations.** `pg_cron` is an
   extension a project enables rather than something a migration should assume, so the

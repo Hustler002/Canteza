@@ -20,6 +20,11 @@ const AUTH_MESSAGES: Array<[RegExp, ErrorCode]> = [
   [/rate limit|too many requests/i, ERROR_CODES.RATE_LIMITED],
   // GoTrue refused the Turnstile token: missing, spent, expired or failed.
   [/captcha/i, ERROR_CODES.CAPTCHA_FAILED],
+  // The sign-up hook's refusal (campus_email_signup). Its message starts with the code,
+  // which the prefix rule above already catches; this is the fallback if GoTrue rewords.
+  [/college email/i, ERROR_CODES.EMAIL_NOT_ALLOWED],
+  // A wrong, spent or expired email code (GoTrue's `otp_expired`).
+  [/token has expired or is invalid|otp.*(expired|invalid)/i, ERROR_CODES.CODE_INVALID],
   [/jwt expired|invalid claim|session.*missing|refresh token/i, ERROR_CODES.UNAUTHENTICATED],
 ];
 

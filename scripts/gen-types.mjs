@@ -23,7 +23,8 @@ const AUTH_SHIM = `
   create table auth.users (
     id uuid primary key default gen_random_uuid(),
     email text unique,
-    raw_user_meta_data jsonb not null default '{}'
+    raw_user_meta_data jsonb not null default '{}',
+    email_change text
   );
   create or replace function auth.uid() returns uuid language sql stable as $shim$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
@@ -31,6 +32,7 @@ const AUTH_SHIM = `
   create role anon;
   create role authenticated;
   create role service_role;
+  create role supabase_auth_admin;
 `;
 
 /** Postgres type -> TypeScript. Anything unmapped becomes `unknown`, loudly. */

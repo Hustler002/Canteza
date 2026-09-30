@@ -1,5 +1,6 @@
 export * from './database.types';
 export * from './brand';
+export * from './campus-email';
 export * from './config';
 export * from './errors';
 export * from './limits';

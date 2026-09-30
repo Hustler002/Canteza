@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Link } from 'expo-router';
 import { Text, View } from 'react-native';
 import { signIn } from '@canteza/api';
-import { toAppError } from '@canteza/shared';
+import { CAMPUS_EMAIL_DOMAIN, ERROR_CODES, toAppError } from '@canteza/shared';
 import { supabase } from '../../src/lib/supabase';
 import { AuthShell } from '../../src/components/auth-shell';
 import { useCaptcha } from '../../src/components/captcha';
+import { EmailCodeStep } from '../../src/components/email-code';
 import { Button, Field, FormError } from '../../src/components/ui';
 import { useTheme } from '../../src/theme';
 
@@ -15,6 +16,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const captcha = useCaptcha();
 
   async function submit() {
@@ -25,12 +27,30 @@ export default function SignIn() {
       await signIn(supabase, { email, password, captchaToken: captcha.token });
       // No navigation here: the session listener re-routes once the role is known.
     } catch (err) {
-      setError(toAppError(err).userMessage);
+      const appError = toAppError(err);
+      // GoTrue says this only after the password matched: an account that never
+      // entered its code. Offer the code step rather than a dead end.
+      if (appError.code === ERROR_CODES.EMAIL_NOT_CONFIRMED) setUnconfirmed(true);
+      else setError(appError.userMessage);
     } finally {
       setBusy(false);
       // A CAPTCHA token is spent by the attempt, whatever it answered.
       captcha.reset();
     }
+  }
+
+  if (unconfirmed) {
+    return (
+      <AuthShell title="Confirm your email" subtitle="Your account is waiting for its code.">
+        <EmailCodeStep
+          email={email.trim().toLowerCase()}
+          password={password}
+          sent={false}
+          onBack={() => setUnconfirmed(false)}
+          backLabel="Back to sign in"
+        />
+      </AuthShell>
+    );
   }
 
   return (
@@ -53,7 +73,7 @@ export default function SignIn() {
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
-        placeholder="you@campus.edu"
+        placeholder={`you@${CAMPUS_EMAIL_DOMAIN}`}
         textContentType="emailAddress"
       />
       <Field

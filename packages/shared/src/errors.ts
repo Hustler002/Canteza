@@ -1,3 +1,5 @@
+import { CAMPUS_EMAIL_DOMAIN } from './campus-email';
+
 /**
  * Every failure the user can hit has a stable code, a safe user-facing message,
  * and optional technical details that stay out of the UI.
@@ -10,6 +12,8 @@ export const ERROR_CODES = {
   EMAIL_NOT_CONFIRMED: 'EMAIL_NOT_CONFIRMED',
   RATE_LIMITED: 'RATE_LIMITED',
   CAPTCHA_FAILED: 'CAPTCHA_FAILED',
+  EMAIL_NOT_ALLOWED: 'EMAIL_NOT_ALLOWED',
+  CODE_INVALID: 'CODE_INVALID',
   FORBIDDEN: 'FORBIDDEN',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
   NOT_FOUND: 'NOT_FOUND',
@@ -46,6 +50,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   EMAIL_NOT_CONFIRMED: 'Check your email and confirm your address first.',
   RATE_LIMITED: 'Too many attempts. Wait a minute and try again.',
   CAPTCHA_FAILED: 'The security check did not go through. Wait for it to finish, then try again.',
+  EMAIL_NOT_ALLOWED: `Sign up with your college email, ending @${CAMPUS_EMAIL_DOMAIN} (no "+" in it).`,
+  CODE_INVALID: 'That code is wrong or has expired. Check the latest email, or send a new code.',
   FORBIDDEN: "You don't have access to this.",
   ACCOUNT_SUSPENDED:
     'This account has been suspended. Contact support if you think this is a mistake.',

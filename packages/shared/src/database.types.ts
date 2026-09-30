@@ -1094,8 +1094,20 @@ export type Database = {
       };
       Returns: number;
     };
+    hook_before_user_created: {
+      Args: {
+        event: Json | null;
+      };
+      Returns: Json;
+    };
     is_admin: {
       Args: Record<PropertyKey, never>;
+      Returns: boolean;
+    };
+    is_campus_email: {
+      Args: {
+        email: string | null;
+      };
       Returns: boolean;
     };
     is_delivery_partner: {
